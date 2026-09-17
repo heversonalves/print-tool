@@ -1,0 +1,62 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".", ".", "{20E2D800-E76B-4B7D-AD99-C3AF194DDCBC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrintTool.Common", "src\PrintTool.Common\PrintTool.Common.csproj", "{3410183F-188F-432F-8D0E-7DBCAB4335B5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrintTool.Host", "src\PrintTool.Host\PrintTool.Host.csproj", "{693E3F24-2786-4241-B2C6-46D8421EC15A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrintTool.Client", "src\PrintTool.Client\PrintTool.Client.csproj", "{55B13A1C-6723-49A8-8E6C-6846AA1667E0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrintTool.Common.Tests", "tests\PrintTool.Common.Tests\PrintTool.Common.Tests.csproj", "{045794DB-E517-4781-BB68-5C559E681A1D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrintTool.Host.Tests", "tests\PrintTool.Host.Tests\PrintTool.Host.Tests.csproj", "{BB72A54A-C2C8-4A2E-A862-92B7116A2FBB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrintTool.Client.Tests", "tests\PrintTool.Client.Tests\PrintTool.Client.Tests.csproj", "{8FB9F9A6-6036-4D7D-9AD4-D0C3EF2D5F25}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3410183F-188F-432F-8D0E-7DBCAB4335B5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3410183F-188F-432F-8D0E-7DBCAB4335B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3410183F-188F-432F-8D0E-7DBCAB4335B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3410183F-188F-432F-8D0E-7DBCAB4335B5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{693E3F24-2786-4241-B2C6-46D8421EC15A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{693E3F24-2786-4241-B2C6-46D8421EC15A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{693E3F24-2786-4241-B2C6-46D8421EC15A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{693E3F24-2786-4241-B2C6-46D8421EC15A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{55B13A1C-6723-49A8-8E6C-6846AA1667E0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{55B13A1C-6723-49A8-8E6C-6846AA1667E0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{55B13A1C-6723-49A8-8E6C-6846AA1667E0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{55B13A1C-6723-49A8-8E6C-6846AA1667E0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{045794DB-E517-4781-BB68-5C559E681A1D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{045794DB-E517-4781-BB68-5C559E681A1D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{045794DB-E517-4781-BB68-5C559E681A1D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{045794DB-E517-4781-BB68-5C559E681A1D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BB72A54A-C2C8-4A2E-A862-92B7116A2FBB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB72A54A-C2C8-4A2E-A862-92B7116A2FBB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB72A54A-C2C8-4A2E-A862-92B7116A2FBB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB72A54A-C2C8-4A2E-A862-92B7116A2FBB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8FB9F9A6-6036-4D7D-9AD4-D0C3EF2D5F25}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8FB9F9A6-6036-4D7D-9AD4-D0C3EF2D5F25}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8FB9F9A6-6036-4D7D-9AD4-D0C3EF2D5F25}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8FB9F9A6-6036-4D7D-9AD4-D0C3EF2D5F25}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{3410183F-188F-432F-8D0E-7DBCAB4335B5} = {20E2D800-E76B-4B7D-AD99-C3AF194DDCBC}
+		{693E3F24-2786-4241-B2C6-46D8421EC15A} = {20E2D800-E76B-4B7D-AD99-C3AF194DDCBC}
+		{55B13A1C-6723-49A8-8E6C-6846AA1667E0} = {20E2D800-E76B-4B7D-AD99-C3AF194DDCBC}
+		{045794DB-E517-4781-BB68-5C559E681A1D} = {20E2D800-E76B-4B7D-AD99-C3AF194DDCBC}
+		{BB72A54A-C2C8-4A2E-A862-92B7116A2FBB} = {20E2D800-E76B-4B7D-AD99-C3AF194DDCBC}
+		{8FB9F9A6-6036-4D7D-9AD4-D0C3EF2D5F25} = {20E2D800-E76B-4B7D-AD99-C3AF194DDCBC}
+	EndGlobalSection
+EndGlobal
