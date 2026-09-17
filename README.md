@@ -1,10 +1,5 @@
-# Print Server LAN — Ferramenta de Compartilhamento de Impressoras
-
-## Visão geral
-
+## Print Tools
 Ferramenta própria de compartilhamento de impressoras USB locais em rede local, substituindo o compartilhamento nativo do Windows (SMB). Formada por dois agentes: um instalado no PC onde a impressora está fisicamente conectada (Host), e outro nos PCs que precisam imprimir remotamente (Client). Toda a comunicação acontece dentro da rede local, sem qualquer dependência de acesso externo à internet.
-
-Pensada desde o início para evoluir de ferramenta interna para produto comercial voltado a empresas.
 
 ## Problema que resolve
 
