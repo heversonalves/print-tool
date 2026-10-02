@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using PrintTool.Client.Discovery;
 using PrintTool.Common.Discovery;
 using PrintTool.Common.Protocol.Messages;
@@ -13,9 +14,10 @@ public class UdpDiscoveryClientTests
     [Fact]
     public async Task ProbeAsync_HostResponds_ReturnsMatchingAnnouncement()
     {
-        using var fakeHost = new UdpClient();
-        fakeHost.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-        fakeHost.Client.Bind(new IPEndPoint(IPAddress.Any, DiscoveryConstants.UdpPort));
+        // Porta livre em vez da padrão, para não disputar a porta com outros processos de teste
+        // (os assemblies de teste rodam em paralelo) ou com um agente real instalado na máquina.
+        using var fakeHost = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
+        int udpPort = ((IPEndPoint)fakeHost.Client.LocalEndPoint!).Port;
 
         var fakeHostTask = Task.Run(async () =>
         {
@@ -28,7 +30,7 @@ public class UdpDiscoveryClientTests
             await fakeHost.SendAsync(response, received.RemoteEndPoint);
         });
 
-        var client = new UdpDiscoveryClient(NullLogger<UdpDiscoveryClient>.Instance);
+        var client = CreateClient(udpPort);
         IReadOnlyList<DiscoveryAnnouncement> results = await client.ProbeAsync(TimeSpan.FromSeconds(3), CancellationToken.None);
 
         await fakeHostTask;
@@ -39,10 +41,19 @@ public class UdpDiscoveryClientTests
     [Fact]
     public async Task ProbeAsync_NoHostResponds_ReturnsEmptyAfterTimeout()
     {
-        var client = new UdpDiscoveryClient(NullLogger<UdpDiscoveryClient>.Instance);
+        var client = CreateClient(GetFreeUdpPort());
 
         IReadOnlyList<DiscoveryAnnouncement> results = await client.ProbeAsync(TimeSpan.FromMilliseconds(300), CancellationToken.None);
 
         Assert.Empty(results);
+    }
+
+    private static UdpDiscoveryClient CreateClient(int udpPort) =>
+        new(Options.Create(new DiscoveryOptions { UdpPort = udpPort }), NullLogger<UdpDiscoveryClient>.Instance);
+
+    private static int GetFreeUdpPort()
+    {
+        using var socket = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
+        return ((IPEndPoint)socket.Client.LocalEndPoint!).Port;
     }
 }

@@ -11,6 +11,7 @@ ClientPrinterMappingConfig mappingConfig = ClientPrinterMappingConfig.LoadOrCrea
 string spoolDirectory = Path.Combine(AppContext.BaseDirectory, "spool");
 
 builder.Services.AddSingleton(mappingConfig);
+builder.Services.Configure<DiscoveryOptions>(builder.Configuration.GetSection("Discovery"));
 builder.Services.AddSingleton<IDiscoveryClient, UdpDiscoveryClient>();
 builder.Services.AddSingleton<DiscoveredHostTable>();
 builder.Services.AddHostedService(sp => new LoopbackServer(

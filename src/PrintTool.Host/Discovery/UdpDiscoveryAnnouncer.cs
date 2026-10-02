@@ -20,6 +20,7 @@ public sealed class UdpDiscoveryAnnouncer : IDiscoveryAnnouncer, IHostedService
     private readonly IPrinterManager _printerManager;
     private readonly SharedPrintersConfig _sharedPrinters;
     private readonly int _tcpPort;
+    private readonly int _udpPort;
     private readonly ILogger<UdpDiscoveryAnnouncer> _logger;
 
     private UdpClient? _udpClient;
@@ -30,11 +31,13 @@ public sealed class UdpDiscoveryAnnouncer : IDiscoveryAnnouncer, IHostedService
         IPrinterManager printerManager,
         SharedPrintersConfig sharedPrinters,
         IOptions<PrintServerOptions> printServerOptions,
+        IOptions<DiscoveryOptions> discoveryOptions,
         ILogger<UdpDiscoveryAnnouncer> logger)
     {
         _printerManager = printerManager;
         _sharedPrinters = sharedPrinters;
         _tcpPort = printServerOptions.Value.Port;
+        _udpPort = discoveryOptions.Value.UdpPort;
         _logger = logger;
     }
 
@@ -43,9 +46,9 @@ public sealed class UdpDiscoveryAnnouncer : IDiscoveryAnnouncer, IHostedService
         _stoppingCts = new CancellationTokenSource();
         _udpClient = new UdpClient();
         _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-        _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, DiscoveryConstants.UdpPort));
+        _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, _udpPort));
 
-        _logger.LogInformation("DiscoveryAnnouncer escutando sondagens UDP na porta {Port}.", DiscoveryConstants.UdpPort);
+        _logger.LogInformation("DiscoveryAnnouncer escutando sondagens UDP na porta {Port}.", _udpPort);
         _receiveLoopTask = ReceiveLoopAsync(_stoppingCts.Token);
         return Task.CompletedTask;
     }

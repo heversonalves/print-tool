@@ -4,7 +4,7 @@ public static class DiscoveryConstants
 {
     /// <summary>
     /// Porta UDP usada para sondagem (broadcast, Client -> rede) e para resposta
-    /// (unicast, Host -> Client). Fixa e conhecida por ambos os agentes.
+    /// (unicast, Host -> Client). Valor padrão de <see cref="DiscoveryOptions.UdpPort"/>.
     /// </summary>
     public const int UdpPort = 8721;
 

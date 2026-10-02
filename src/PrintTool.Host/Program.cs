@@ -1,3 +1,4 @@
+using PrintTool.Common.Discovery;
 using PrintTool.Host.Discovery;
 using PrintTool.Host.Network;
 using PrintTool.Host.Printers;
@@ -6,6 +7,7 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddWindowsService(options => options.ServiceName = "PrintTool.Host");
 
 builder.Services.Configure<PrintServerOptions>(builder.Configuration.GetSection("PrintServer"));
+builder.Services.Configure<DiscoveryOptions>(builder.Configuration.GetSection("Discovery"));
 
 string sharedPrintersConfigPath = Path.Combine(AppContext.BaseDirectory, "sharedprinters.json");
 builder.Services.AddSingleton(SharedPrintersConfig.LoadOrCreate(sharedPrintersConfigPath));

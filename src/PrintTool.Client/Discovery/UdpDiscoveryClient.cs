@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using PrintTool.Common.Discovery;
 using PrintTool.Common.Protocol.Messages;
 
@@ -13,10 +14,12 @@ namespace PrintTool.Client.Discovery;
 /// </summary>
 public sealed class UdpDiscoveryClient : IDiscoveryClient
 {
+    private readonly int _udpPort;
     private readonly ILogger<UdpDiscoveryClient> _logger;
 
-    public UdpDiscoveryClient(ILogger<UdpDiscoveryClient> logger)
+    public UdpDiscoveryClient(IOptions<DiscoveryOptions> discoveryOptions, ILogger<UdpDiscoveryClient> logger)
     {
+        _udpPort = discoveryOptions.Value.UdpPort;
         _logger = logger;
     }
 
@@ -80,9 +83,9 @@ public sealed class UdpDiscoveryClient : IDiscoveryClient
     /// Broadcast "limitado" (255.255.255.255) como fallback, mais o broadcast dirigido
     /// de cada interface IPv4 ativa — mais confiável em redes com mais de um adaptador.
     /// </summary>
-    private static IEnumerable<IPEndPoint> GetBroadcastEndpoints()
+    private IEnumerable<IPEndPoint> GetBroadcastEndpoints()
     {
-        var endpoints = new List<IPEndPoint> { new(IPAddress.Broadcast, DiscoveryConstants.UdpPort) };
+        var endpoints = new List<IPEndPoint> { new(IPAddress.Broadcast, _udpPort) };
 
         foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
         {
@@ -99,7 +102,7 @@ public sealed class UdpDiscoveryClient : IDiscoveryClient
                 }
 
                 IPAddress broadcast = GetDirectedBroadcastAddress(addressInfo.Address, addressInfo.IPv4Mask);
-                endpoints.Add(new IPEndPoint(broadcast, DiscoveryConstants.UdpPort));
+                endpoints.Add(new IPEndPoint(broadcast, _udpPort));
             }
         }
 
