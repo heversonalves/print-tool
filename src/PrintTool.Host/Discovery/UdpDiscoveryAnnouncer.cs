@@ -49,6 +49,7 @@ public sealed class UdpDiscoveryAnnouncer : IDiscoveryAnnouncer, IHostedService
         _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, _udpPort));
 
         _logger.LogInformation("DiscoveryAnnouncer escutando sondagens UDP na porta {Port}.", _udpPort);
+        LogLocalPrinters();
         _receiveLoopTask = ReceiveLoopAsync(_stoppingCts.Token);
         return Task.CompletedTask;
     }
@@ -115,6 +116,30 @@ public sealed class UdpDiscoveryAnnouncer : IDiscoveryAnnouncer, IHostedService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Falha ao responder sondagem de descoberta para {Remote}.", received.RemoteEndPoint);
+        }
+    }
+
+    /// <summary>
+    /// Registra na inicialização as impressoras locais vistas pelo spooler e quais estão
+    /// compartilhadas, para o administrador conferir os nomes exatos a usar em sharedprinters.json.
+    /// </summary>
+    private void LogLocalPrinters()
+    {
+        IReadOnlyList<string> localPrinters;
+        try
+        {
+            localPrinters = _printerManager.GetLocalPrinterNames();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falha ao listar as impressoras locais.");
+            return;
+        }
+
+        _logger.LogInformation("{Count} impressora(s) local(is) detectada(s).", localPrinters.Count);
+        foreach (string printer in localPrinters)
+        {
+            _logger.LogInformation("  [{Status}] {Printer}", _sharedPrinters.IsShared(printer) ? "compartilhada" : "não compartilhada", printer);
         }
     }
 
