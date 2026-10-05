@@ -60,6 +60,24 @@ Fluxo:
 - **Escopo de rede**: solução pensada exclusivamente para rede local. Nenhum componente deve expor porta para a internet.
 - **Escala variável**: o número de impressoras e PCs por loja varia bastante (de uma única impressora até várias máquinas dividindo a mesma impressora). A arquitetura de descoberta automática precisa suportar esse cenário sem configuração manual por máquina.
 
+## Validação manual — Fase 1
+
+Teste ponta a ponta realizado em hardware real: Agente Host numa máquina Windows com uma impressora EPSON L3150 conectada via USB, e Agente Cliente em um notebook separado, ambos na mesma rede local.
+
+- **Descoberta automática**: o Cliente encontrou o Host por sondagem UDP broadcast e resolveu a impressora compartilhada sozinho, sem nenhum IP fixo cadastrado em lugar nenhum.
+- **Impressão real**: um documento de teste impresso no Cliente — usando a impressora cadastrada no Windows via "Porta TCP/IP Padrão" apontando para o loopback do Cliente — saiu fisicamente na EPSON L3150 conectada ao Host, percorrendo o caminho completo: driver do Windows → loopback do Cliente → encaminhamento TCP → Host → injeção via `winspool.drv`.
+- **Resiliência observada**: quando o processo do Host ou do Cliente foi encerrado e religado, a descoberta automática se recuperou sozinha no ciclo de sondagem seguinte, sem reconfiguração manual.
+
+### Nota de instalação — status SNMP na porta TCP/IP do Cliente
+
+Ao cadastrar a impressora no Windows do Cliente via "Adicionar impressora" → "Porta TCP/IP Padrão" apontando para `127.0.0.1`, o assistente do Windows tenta primeiro consultar o dispositivo via SNMP. Como o Agente Cliente não implementa SNMP, essa consulta falha e aparece o aviso "O dispositivo não foi encontrado na rede" — isso é esperado e não impede a criação da porta; basta manter "Padrão: Generic Network Card" e avançar.
+
+Mais importante: a porta é criada por padrão com **"Habilitar status SNMP"** marcado nas propriedades. Isso pode fazer o Windows reportar falha de impressão mesmo com o Agente Cliente e o Agente Host funcionando corretamente, porque o spooler espera uma resposta SNMP que nunca chega. Para evitar isso:
+
+1. Impressoras e scanners → propriedades da impressora → aba **Portas** → **Configurar Porta**.
+2. Protocolo: **Raw**, porta: a mesma porta configurada no `printers.json` do Cliente para essa impressora.
+3. Desmarcar **"Habilitar status SNMP"**.
+
 ## Diretrizes de design
 
 Interface (console de gestão e QR code de pareamento) não deve ter "cara de IA" — sem os clichês visuais genéricos de interface gerada por IA. Buscar direção visual própria e intencional antes de qualquer implementação de UI.
