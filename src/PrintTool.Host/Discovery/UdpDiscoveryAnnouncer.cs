@@ -7,6 +7,7 @@ using PrintTool.Common.Discovery;
 using PrintTool.Common.Protocol.Messages;
 using PrintTool.Host.Network;
 using PrintTool.Host.Printers;
+using PrintTool.Host.Security;
 
 namespace PrintTool.Host.Discovery;
 
@@ -19,6 +20,7 @@ public sealed class UdpDiscoveryAnnouncer : IDiscoveryAnnouncer, IHostedService
 {
     private readonly IPrinterManager _printerManager;
     private readonly SharedPrintersConfig _sharedPrinters;
+    private readonly HostIdentity _hostIdentity;
     private readonly int _tcpPort;
     private readonly int _udpPort;
     private readonly ILogger<UdpDiscoveryAnnouncer> _logger;
@@ -30,12 +32,14 @@ public sealed class UdpDiscoveryAnnouncer : IDiscoveryAnnouncer, IHostedService
     public UdpDiscoveryAnnouncer(
         IPrinterManager printerManager,
         SharedPrintersConfig sharedPrinters,
+        HostIdentity hostIdentity,
         IOptions<PrintServerOptions> printServerOptions,
         IOptions<DiscoveryOptions> discoveryOptions,
         ILogger<UdpDiscoveryAnnouncer> logger)
     {
         _printerManager = printerManager;
         _sharedPrinters = sharedPrinters;
+        _hostIdentity = hostIdentity;
         _tcpPort = printServerOptions.Value.Port;
         _udpPort = discoveryOptions.Value.UdpPort;
         _logger = logger;
@@ -154,6 +158,8 @@ public sealed class UdpDiscoveryAnnouncer : IDiscoveryAnnouncer, IHostedService
             Environment.MachineName,
             LocalNetworkAddress.GetPrimaryIPv4().ToString(),
             _tcpPort,
-            sharedPrinters);
+            sharedPrinters,
+            _hostIdentity.HostId,
+            _hostIdentity.CertificateThumbprint);
     }
 }

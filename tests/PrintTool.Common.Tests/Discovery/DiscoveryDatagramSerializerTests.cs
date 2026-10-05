@@ -27,7 +27,9 @@ public class DiscoveryDatagramSerializerTests
             "HOST-CAIXA-01",
             "192.168.0.42",
             9100,
-            new[] { "EPSON L3250", "Brother HL-1212W" });
+            new[] { "EPSON L3250", "Brother HL-1212W" },
+            Guid.NewGuid(),
+            "AA:BB:CC");
 
         byte[] bytes = DiscoveryDatagramSerializer.Serialize(DiscoveryDatagramKind.Announcement, announcement);
         bool ok = DiscoveryDatagramSerializer.TryDeserialize(bytes, out DiscoveryDatagram? datagram);

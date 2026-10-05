@@ -25,7 +25,7 @@ public class UdpDiscoveryClientTests
             DiscoveryDatagramSerializer.TryDeserialize(received.Buffer, out DiscoveryDatagram? datagram);
             var probe = DiscoveryDatagramSerializer.ReadMessage<DiscoveryProbe>(datagram!);
 
-            var announcement = new DiscoveryAnnouncement(probe.RequestId, "HOST-CAIXA-01", "10.0.0.5", 9100, new[] { "EPSON L3250" });
+            var announcement = new DiscoveryAnnouncement(probe.RequestId, "HOST-CAIXA-01", "10.0.0.5", 9100, new[] { "EPSON L3250" }, Guid.NewGuid(), "AA:BB:CC");
             byte[] response = DiscoveryDatagramSerializer.Serialize(DiscoveryDatagramKind.Announcement, announcement);
             await fakeHost.SendAsync(response, received.RemoteEndPoint);
         });

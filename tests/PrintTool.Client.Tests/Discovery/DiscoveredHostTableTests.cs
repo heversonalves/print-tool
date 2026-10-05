@@ -23,7 +23,7 @@ public class DiscoveredHostTableTests
         {
             NextResult = new[]
             {
-                new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-CAIXA-01", "10.0.0.5", 9100, new[] { "EPSON L3250", "Brother HL-1212W" }),
+                new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-CAIXA-01", "10.0.0.5", 9100, new[] { "EPSON L3250", "Brother HL-1212W" }, Guid.NewGuid(), "AA:BB:CC"),
             },
         };
         var table = new DiscoveredHostTable(stub, NullLogger<DiscoveredHostTable>.Instance);
@@ -43,7 +43,7 @@ public class DiscoveredHostTableTests
         {
             NextResult = new[]
             {
-                new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-CAIXA-01", "10.0.0.5", 9100, new[] { "EPSON L3250" }),
+                new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-CAIXA-01", "10.0.0.5", 9100, new[] { "EPSON L3250" }, Guid.NewGuid(), "AA:BB:CC"),
             },
         };
         var table = new DiscoveredHostTable(stub, NullLogger<DiscoveredHostTable>.Instance);
@@ -57,7 +57,7 @@ public class DiscoveredHostTableTests
     {
         var stub = new StubDiscoveryClient
         {
-            NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-A", "10.0.0.5", 9100, new[] { "EPSON L3250" }) },
+            NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-A", "10.0.0.5", 9100, new[] { "EPSON L3250" }, Guid.NewGuid(), "AA:BB:CC") },
         };
         var table = new DiscoveredHostTable(stub, NullLogger<DiscoveredHostTable>.Instance);
         await table.RefreshAsync(TimeSpan.FromSeconds(1), CancellationToken.None);

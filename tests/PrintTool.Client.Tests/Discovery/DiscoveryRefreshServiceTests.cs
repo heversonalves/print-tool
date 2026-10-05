@@ -46,7 +46,7 @@ public class DiscoveryRefreshServiceTests
     {
         var discovery = new CountingDiscoveryClient
         {
-            NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-CAIXA-01", "10.0.0.5", 9100, new[] { "EPSON L3150 Series" }) },
+            NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-CAIXA-01", "10.0.0.5", 9100, new[] { "EPSON L3150 Series" }, Guid.NewGuid(), "AA:BB:CC") },
         };
         var table = new DiscoveredHostTable(discovery, NullLogger<DiscoveredHostTable>.Instance);
         var service = new DiscoveryRefreshService(

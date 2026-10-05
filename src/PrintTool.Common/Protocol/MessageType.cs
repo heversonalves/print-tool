@@ -11,4 +11,8 @@ public enum MessageType : byte
     PrintJobResult = 2,
     DiscoveryProbe = 3,
     DiscoveryAnnouncement = 4,
+    AuthenticateRequest = 5,
+    AuthenticateResult = 6,
+    PairingRequest = 7,
+    PairingResult = 8,
 }

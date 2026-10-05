@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PrintTool.Client.Discovery;
 using PrintTool.Client.Forwarding;
+using PrintTool.Client.Security;
 
 namespace PrintTool.Client.Loopback;
 
@@ -13,6 +14,8 @@ public sealed class LoopbackServer : IHostedService
 {
     private readonly ClientPrinterMappingConfig _mappingConfig;
     private readonly DiscoveredHostTable _hostTable;
+    private readonly ClientIdentity _clientIdentity;
+    private readonly HostTokenStore _tokenStore;
     private readonly ILoggerFactory _loggerFactory;
     private readonly string _spoolDirectory;
 
@@ -21,11 +24,15 @@ public sealed class LoopbackServer : IHostedService
     public LoopbackServer(
         ClientPrinterMappingConfig mappingConfig,
         DiscoveredHostTable hostTable,
+        ClientIdentity clientIdentity,
+        HostTokenStore tokenStore,
         ILoggerFactory loggerFactory,
         string spoolDirectory)
     {
         _mappingConfig = mappingConfig;
         _hostTable = hostTable;
+        _clientIdentity = clientIdentity;
+        _tokenStore = tokenStore;
         _loggerFactory = loggerFactory;
         _spoolDirectory = spoolDirectory;
     }
@@ -34,7 +41,7 @@ public sealed class LoopbackServer : IHostedService
     {
         foreach (ClientPrinterMapping mapping in _mappingConfig.Mappings)
         {
-            var forwarder = new JobForwarder(mapping.RemotePrinterName, _hostTable, _loggerFactory.CreateLogger<JobForwarder>());
+            var forwarder = new JobForwarder(mapping.RemotePrinterName, _hostTable, _clientIdentity, _tokenStore, _loggerFactory.CreateLogger<JobForwarder>());
             string queueDirectory = Path.Combine(_spoolDirectory, "queue", SanitizeForPath(mapping.RemotePrinterName));
             var queue = new LocalJobQueue(
                 mapping.RemotePrinterName,

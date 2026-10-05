@@ -41,7 +41,7 @@ public sealed class DiscoveredHostTable
                 continue;
             }
 
-            var host = new ResolvedHost(announcement.HostName, address, announcement.TcpPort);
+            var host = new ResolvedHost(announcement.HostId, announcement.HostName, address, announcement.TcpPort, announcement.CertThumbprint);
             foreach (string printerName in announcement.Printers)
             {
                 updated[printerName] = host;

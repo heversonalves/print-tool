@@ -1,8 +1,12 @@
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging.Abstractions;
 using PrintTool.Client.Discovery;
 using PrintTool.Client.Forwarding;
+using PrintTool.Client.Security;
+using PrintTool.Client.Tests.TestSupport;
 using PrintTool.Common.Discovery;
 using PrintTool.Common.Protocol;
 using PrintTool.Common.Protocol.Messages;
@@ -26,6 +30,10 @@ public class LocalJobQueueTests : IDisposable
 
     public void Dispose() => Directory.Delete(_tempDir, recursive: true);
 
+    private ClientIdentity BuildClientIdentity() => ClientIdentity.LoadOrCreate(Path.Combine(_tempDir, "client-identity.json"));
+
+    private HostTokenStore BuildTokenStore() => new(Path.Combine(_tempDir, "tokens.json"));
+
     private static int GetFreeTcpPort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -35,23 +43,30 @@ public class LocalJobQueueTests : IDisposable
         return port;
     }
 
-    private static async Task<DiscoveredHostTable> BuildResolvedTableAsync(int port, string printerName)
+    private static async Task<(DiscoveredHostTable Table, Guid HostId, string Thumbprint)> BuildResolvedTableAsync(
+        int port, string printerName, X509Certificate2 certificate)
     {
+        var hostId = Guid.NewGuid();
+        string thumbprint = FakeTlsHost.ThumbprintOf(certificate);
         var stub = new StubDiscoveryClient
         {
-            NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-TESTE", "127.0.0.1", port, new[] { printerName }) },
+            NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-TESTE", "127.0.0.1", port, new[] { printerName }, hostId, thumbprint) },
         };
         var table = new DiscoveredHostTable(stub, NullLogger<DiscoveredHostTable>.Instance);
         await table.RefreshAsync(TimeSpan.FromSeconds(1), CancellationToken.None);
-        return table;
+        return (table, hostId, thumbprint);
     }
 
     [Fact]
     public async Task EnqueueAsync_HostUnavailable_JobStaysQueuedOnDisk()
     {
+        using X509Certificate2 certificate = FakeTlsHost.CreateSelfSignedCertificate();
         int port = GetFreeTcpPort(); // ninguém escuta aqui: Host "fora do ar"
-        DiscoveredHostTable table = await BuildResolvedTableAsync(port, "EPSON L3250");
-        var forwarder = new JobForwarder("EPSON L3250", table, NullLogger<JobForwarder>.Instance);
+        (DiscoveredHostTable table, Guid hostId, string thumbprint) = await BuildResolvedTableAsync(port, "EPSON L3250", certificate);
+        HostTokenStore tokenStore = BuildTokenStore();
+        tokenStore.Save(new HostTokenEntry(hostId, "HOST-TESTE", thumbprint, "token-valido", DateTimeOffset.UtcNow));
+
+        var forwarder = new JobForwarder("EPSON L3250", table, BuildClientIdentity(), tokenStore, NullLogger<JobForwarder>.Instance);
         var queueDir = Path.Combine(_tempDir, "queue");
         var queue = new LocalJobQueue("EPSON L3250", forwarder, queueDir, NullLogger.Instance, drainInterval: TimeSpan.FromMilliseconds(300));
         queue.Start(CancellationToken.None);
@@ -71,9 +86,13 @@ public class LocalJobQueueTests : IDisposable
     [Fact]
     public async Task EnqueueAsync_HostBecomesAvailableLater_JobIsEventuallyDelivered()
     {
+        using X509Certificate2 certificate = FakeTlsHost.CreateSelfSignedCertificate();
         int port = GetFreeTcpPort();
-        DiscoveredHostTable table = await BuildResolvedTableAsync(port, "EPSON L3250");
-        var forwarder = new JobForwarder("EPSON L3250", table, NullLogger<JobForwarder>.Instance);
+        (DiscoveredHostTable table, Guid hostId, string thumbprint) = await BuildResolvedTableAsync(port, "EPSON L3250", certificate);
+        HostTokenStore tokenStore = BuildTokenStore();
+        tokenStore.Save(new HostTokenEntry(hostId, "HOST-TESTE", thumbprint, "token-valido", DateTimeOffset.UtcNow));
+
+        var forwarder = new JobForwarder("EPSON L3250", table, BuildClientIdentity(), tokenStore, NullLogger<JobForwarder>.Instance);
         var queueDir = Path.Combine(_tempDir, "queue");
         var queue = new LocalJobQueue("EPSON L3250", forwarder, queueDir, NullLogger.Instance, drainInterval: TimeSpan.FromMilliseconds(300));
         queue.Start(CancellationToken.None);
@@ -89,8 +108,9 @@ public class LocalJobQueueTests : IDisposable
         var receivedTcs = new TaskCompletionSource<byte[]>();
         _ = Task.Run(async () =>
         {
-            using TcpClient accepted = await listener.AcceptTcpClientAsync();
-            NetworkStream stream = accepted.GetStream();
+            await using SslStream stream = await FakeTlsHost.AcceptAndAuthenticateAsync(listener, certificate);
+            await FakeTlsHost.ExpectAuthenticateRequestAsync(stream);
+
             MessageEnvelope envelope = await FrameReader.ReadFrameAsync(stream);
             var header = FrameReader.ReadMessage<PrintJobRequestHeader>(envelope);
 

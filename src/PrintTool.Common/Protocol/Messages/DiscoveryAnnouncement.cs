@@ -9,4 +9,6 @@ public sealed record DiscoveryAnnouncement(
     string HostName,
     string IpAddress,
     int TcpPort,
-    IReadOnlyList<string> Printers);
+    IReadOnlyList<string> Printers,
+    Guid HostId,
+    string CertThumbprint);

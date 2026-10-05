@@ -1,8 +1,12 @@
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging.Abstractions;
 using PrintTool.Client.Discovery;
 using PrintTool.Client.Loopback;
+using PrintTool.Client.Security;
+using PrintTool.Client.Tests.TestSupport;
 using PrintTool.Common.Discovery;
 using PrintTool.Common.Protocol;
 using PrintTool.Common.Protocol.Messages;
@@ -30,9 +34,13 @@ public class LoopbackServerEndToEndTests
     }
 
     [Fact]
-    public async Task DriverWritesJob_FlowsThroughLoopbackAndForwarder_ReachesFakeHost()
+    public async Task DriverWritesJob_AuthenticatedAndFlowsThroughLoopbackAndForwarder_ReachesFakeHost()
     {
-        // Fake Host: aceita a conexão do JobForwarder e responde como o PrintServer real responderia.
+        var hostId = Guid.NewGuid();
+        using X509Certificate2 hostCertificate = FakeTlsHost.CreateSelfSignedCertificate();
+        string thumbprint = FakeTlsHost.ThumbprintOf(hostCertificate);
+
+        // Fake Host: faz o handshake TLS, exige AuthenticateRequest e responde como o PrintServer real responderia.
         using var hostListener = new TcpListener(IPAddress.Loopback, 0);
         hostListener.Start();
         int hostPort = ((IPEndPoint)hostListener.LocalEndpoint).Port;
@@ -43,21 +51,22 @@ public class LoopbackServerEndToEndTests
         var hostReceivedPrinter = new TaskCompletionSource<(string PrinterName, byte[] Data)>();
         var hostTask = Task.Run(async () =>
         {
-            using TcpClient accepted = await hostListener.AcceptTcpClientAsync();
-            NetworkStream stream = accepted.GetStream();
-            MessageEnvelope envelope = await FrameReader.ReadFrameAsync(stream);
+            await using SslStream sslStream = await FakeTlsHost.AcceptAndAuthenticateAsync(hostListener, hostCertificate);
+            await FakeTlsHost.ExpectAuthenticateRequestAsync(sslStream);
+
+            MessageEnvelope envelope = await FrameReader.ReadFrameAsync(sslStream);
             var header = FrameReader.ReadMessage<PrintJobRequestHeader>(envelope);
 
             using var received = new MemoryStream();
-            await FrameReader.ReadRawAsync(stream, header.DataLength, (chunk, _) => { received.Write(chunk.Span); return Task.CompletedTask; });
-            await FrameWriter.WriteMessageAsync(stream, MessageType.PrintJobResult, new PrintJobResult(true, received.Length));
+            await FrameReader.ReadRawAsync(sslStream, header.DataLength, (chunk, _) => { received.Write(chunk.Span); return Task.CompletedTask; });
+            await FrameWriter.WriteMessageAsync(sslStream, MessageType.PrintJobResult, new PrintJobResult(true, received.Length));
 
             hostReceivedPrinter.SetResult((header.PrinterName, received.ToArray()));
         });
 
         var stub = new StubDiscoveryClient
         {
-            NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-TESTE", "127.0.0.1", hostPort, new[] { "EPSON L3250" }) },
+            NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-TESTE", "127.0.0.1", hostPort, new[] { "EPSON L3250" }, hostId, thumbprint) },
         };
         var hostTable = new DiscoveredHostTable(stub, NullLogger<DiscoveredHostTable>.Instance);
         await hostTable.RefreshAsync(TimeSpan.FromSeconds(1), CancellationToken.None);
@@ -68,8 +77,14 @@ public class LoopbackServerEndToEndTests
             Mappings = { new ClientPrinterMapping(localPort, "EPSON L3250") },
         };
         string spoolDir = Path.Combine(Path.GetTempPath(), "PrintToolTests_spool_" + Guid.NewGuid());
+        string tokensPath = Path.Combine(Path.GetTempPath(), "PrintToolTests_tokens_" + Guid.NewGuid() + ".json");
+        string identityPath = Path.Combine(Path.GetTempPath(), "PrintToolTests_identity_" + Guid.NewGuid() + ".json");
 
-        var loopbackServer = new LoopbackServer(mappingConfig, hostTable, NullLoggerFactory.Instance, spoolDir);
+        var clientIdentity = ClientIdentity.LoadOrCreate(identityPath);
+        var tokenStore = new HostTokenStore(tokensPath);
+        tokenStore.Save(new HostTokenEntry(hostId, "HOST-TESTE", thumbprint, "token-de-teste-ja-pareado", DateTimeOffset.UtcNow));
+
+        var loopbackServer = new LoopbackServer(mappingConfig, hostTable, clientIdentity, tokenStore, NullLoggerFactory.Instance, spoolDir);
         await loopbackServer.StartAsync(CancellationToken.None);
 
         try
@@ -91,9 +106,20 @@ public class LoopbackServerEndToEndTests
         finally
         {
             await loopbackServer.StopAsync(CancellationToken.None);
-            if (Directory.Exists(spoolDir))
+            foreach (string path in new[] { spoolDir })
             {
-                Directory.Delete(spoolDir, recursive: true);
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: true);
+                }
+            }
+
+            foreach (string path in new[] { tokensPath, identityPath })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
             }
         }
     }

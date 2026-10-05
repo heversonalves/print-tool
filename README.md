@@ -78,6 +78,31 @@ Mais importante: a porta é criada por padrão com **"Habilitar status SNMP"** m
 2. Protocolo: **Raw**, porta: a mesma porta configurada no `printers.json` do Cliente para essa impressora.
 3. Desmarcar **"Habilitar status SNMP"**.
 
+## Como parear uma máquina nova (Fase 2)
+
+A partir da Fase 2, o Host exige pareamento via TOTP antes de aceitar qualquer impressão — veja
+"Segurança — pareamento via TOTP" acima. Na prática, em três passos:
+
+1. **No Host**, rode `PrintTool.Host.exe show-totp`. Ele gera (na primeira vez) o segredo TOTP e
+   grava um QR code em `security/totp-qrcode.png`, além de imprimir a URI `otpauth://` e o segredo
+   em Base32 no console, para quem preferir digitar manualmente. Escaneie com qualquer app
+   autenticador (Google/Microsoft Authenticator, Authy — opção "Outra conta").
+2. **No Client novo**, rode `PrintTool.Client.exe pair "<Nome exato da impressora>"` (o mesmo nome
+   usado em `sharedprinters.json` no Host). O comando procura o Host na rede e pede o código de
+   6 dígitos.
+3. Digite o código que está no app autenticador nesse instante. Aprovado, o Host emite um token de
+   longa duração para esta máquina — as impressões seguintes não pedem código de novo.
+
+Para revogar o acesso de uma máquina (ela precisa ser pareada de novo depois):
+
+```
+PrintTool.Host.exe list-clients          # lista as máquinas pareadas e seus ClientId
+PrintTool.Host.exe revoke-client <id>    # revoga o acesso de uma delas
+```
+
+Os dois comandos (`show-totp`, `pair`, `list-clients`, `revoke-client`) rodam o próprio executável
+já instalado como serviço — não sobem um novo serviço, só executam o comando e saem.
+
 ## Diretrizes de design
 
 Interface (console de gestão e QR code de pareamento) não deve ter "cara de IA" — sem os clichês visuais genéricos de interface gerada por IA. Buscar direção visual própria e intencional antes de qualquer implementação de UI.

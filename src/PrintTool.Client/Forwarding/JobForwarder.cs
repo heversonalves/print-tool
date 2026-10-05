@@ -1,6 +1,9 @@
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using Microsoft.Extensions.Logging;
 using PrintTool.Client.Discovery;
+using PrintTool.Client.Security;
 using PrintTool.Common.Protocol;
 using PrintTool.Common.Protocol.Messages;
 
@@ -8,7 +11,7 @@ namespace PrintTool.Client.Forwarding;
 
 /// <summary>
 /// Encaminha um job de impressão para o Host que atualmente serve <paramref name="printerName"/>,
-/// mantendo uma conexão TCP persistente e reconectando automaticamente em caso de falha.
+/// mantendo uma conexão TCP+TLS persistente e reconectando automaticamente em caso de falha.
 /// Cada instância cuida de uma impressora remota; várias impressoras usam várias instâncias.
 /// </summary>
 public sealed class JobForwarder : IAsyncDisposable
@@ -18,16 +21,25 @@ public sealed class JobForwarder : IAsyncDisposable
 
     private readonly string _printerName;
     private readonly DiscoveredHostTable _hostTable;
+    private readonly ClientIdentity _clientIdentity;
+    private readonly HostTokenStore _tokenStore;
     private readonly ILogger<JobForwarder> _logger;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
 
     private TcpClient? _tcpClient;
-    private NetworkStream? _stream;
+    private Stream? _stream;
 
-    public JobForwarder(string printerName, DiscoveredHostTable hostTable, ILogger<JobForwarder> logger)
+    public JobForwarder(
+        string printerName,
+        DiscoveredHostTable hostTable,
+        ClientIdentity clientIdentity,
+        HostTokenStore tokenStore,
+        ILogger<JobForwarder> logger)
     {
         _printerName = printerName;
         _hostTable = hostTable;
+        _clientIdentity = clientIdentity;
+        _tokenStore = tokenStore;
         _logger = logger;
     }
 
@@ -57,7 +69,7 @@ public sealed class JobForwarder : IAsyncDisposable
 
             try
             {
-                NetworkStream stream = await EnsureConnectedAsync(cancellationToken).ConfigureAwait(false);
+                Stream stream = await EnsureConnectedAsync(cancellationToken).ConfigureAwait(false);
 
                 var header = new PrintJobRequestHeader(_printerName, jobName, dataLength);
                 await FrameWriter.WriteMessageAsync(stream, MessageType.PrintJobRequestHeader, header, cancellationToken).ConfigureAwait(false);
@@ -66,7 +78,7 @@ public sealed class JobForwarder : IAsyncDisposable
                 MessageEnvelope envelope = await FrameReader.ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false);
                 return FrameReader.ReadMessage<PrintJobResult>(envelope);
             }
-            catch (Exception ex) when (ex is IOException or SocketException or ProtocolException or InvalidOperationException)
+            catch (Exception ex) when (ex is IOException or SocketException or ProtocolException or InvalidOperationException or AuthenticationException)
             {
                 lastError = ex;
                 _logger.LogWarning(ex, "Falha ao enviar job '{JobName}' para '{PrinterName}' (tentativa {Attempt}/{Max}).", jobName, _printerName, attempt + 1, MaxAttemptsPerSend);
@@ -79,7 +91,7 @@ public sealed class JobForwarder : IAsyncDisposable
 
     private static TimeSpan BackoffFor(int attempt) => TimeSpan.FromMilliseconds(500 * Math.Pow(2, attempt - 1));
 
-    private async Task<NetworkStream> EnsureConnectedAsync(CancellationToken cancellationToken)
+    private async Task<Stream> EnsureConnectedAsync(CancellationToken cancellationToken)
     {
         await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -102,12 +114,42 @@ public sealed class JobForwarder : IAsyncDisposable
                 throw new InvalidOperationException($"Nenhum Host anunciando a impressora '{_printerName}' foi encontrado na rede.");
             }
 
+            HostTokenEntry? tokenEntry = _tokenStore.TryGet(host.HostId);
+            if (tokenEntry is null)
+            {
+                throw new InvalidOperationException(
+                    $"Esta máquina ainda não foi pareada com o Host '{host.HostName}'. Rode: PrintTool.Client.exe pair \"{_printerName}\".");
+            }
+
             var client = new TcpClient();
             await client.ConnectAsync(host.Address, host.TcpPort, cancellationToken).ConfigureAwait(false);
 
+            // O thumbprint validado é o fixado no pareamento (tokenEntry), não o que a
+            // descoberta UDP anunciar agora — impede que um respondente falso substitua o Host.
+            var sslStream = new SslStream(
+                client.GetStream(),
+                leaveInnerStreamOpen: false,
+                (_, certificate, _, _) => PinnedCertificateValidator.Matches(certificate, tokenEntry.CertThumbprint));
+            await sslStream.AuthenticateAsClientAsync(host.HostName, null, false).ConfigureAwait(false);
+
+            await FrameWriter.WriteMessageAsync(
+                sslStream, MessageType.AuthenticateRequest,
+                new AuthenticateRequest(_clientIdentity.ClientId, tokenEntry.Token),
+                cancellationToken).ConfigureAwait(false);
+            MessageEnvelope authEnvelope = await FrameReader.ReadFrameAsync(sslStream, cancellationToken).ConfigureAwait(false);
+            AuthenticateResult authResult = FrameReader.ReadMessage<AuthenticateResult>(authEnvelope);
+
+            if (!authResult.Success)
+            {
+                await sslStream.DisposeAsync().ConfigureAwait(false);
+                client.Dispose();
+                throw new InvalidOperationException(
+                    $"Host '{host.HostName}' rejeitou a autenticação desta máquina ({authResult.Reason}). Pareie de novo: PrintTool.Client.exe pair \"{_printerName}\".");
+            }
+
             _tcpClient = client;
-            _stream = client.GetStream();
-            _logger.LogInformation("Conectado ao Host '{HostName}' ({Address}:{Port}) para a impressora '{PrinterName}'.", host.HostName, host.Address, host.TcpPort, _printerName);
+            _stream = sslStream;
+            _logger.LogInformation("Conectado e autenticado no Host '{HostName}' ({Address}:{Port}) para a impressora '{PrinterName}'.", host.HostName, host.Address, host.TcpPort, _printerName);
             return _stream;
         }
         finally

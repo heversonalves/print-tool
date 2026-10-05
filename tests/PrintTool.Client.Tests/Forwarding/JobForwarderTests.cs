@@ -1,8 +1,12 @@
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging.Abstractions;
 using PrintTool.Client.Discovery;
 using PrintTool.Client.Forwarding;
+using PrintTool.Client.Security;
+using PrintTool.Client.Tests.TestSupport;
 using PrintTool.Common.Discovery;
 using PrintTool.Common.Protocol;
 using PrintTool.Common.Protocol.Messages;
@@ -10,7 +14,7 @@ using Xunit;
 
 namespace PrintTool.Client.Tests.Forwarding;
 
-public class JobForwarderTests
+public class JobForwarderTests : IDisposable
 {
     private sealed class StubDiscoveryClient : IDiscoveryClient
     {
@@ -20,29 +24,44 @@ public class JobForwarderTests
             => Task.FromResult(NextResult);
     }
 
-    private static async Task<DiscoveredHostTable> BuildResolvedTableAsync(int port, string printerName)
+    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "PrintToolTests_jobforwarder_" + Guid.NewGuid());
+
+    public JobForwarderTests() => Directory.CreateDirectory(_tempDir);
+
+    public void Dispose() => Directory.Delete(_tempDir, recursive: true);
+
+    private ClientIdentity BuildClientIdentity() => ClientIdentity.LoadOrCreate(Path.Combine(_tempDir, "client-identity.json"));
+
+    private HostTokenStore BuildTokenStore() => new(Path.Combine(_tempDir, "tokens.json"));
+
+    private static async Task<(DiscoveredHostTable Table, Guid HostId, string Thumbprint)> BuildResolvedTableAsync(
+        int port, string printerName, X509Certificate2 certificate)
     {
+        var hostId = Guid.NewGuid();
+        string thumbprint = FakeTlsHost.ThumbprintOf(certificate);
         var stub = new StubDiscoveryClient
         {
-            NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-TESTE", "127.0.0.1", port, new[] { printerName }) },
+            NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-TESTE", "127.0.0.1", port, new[] { printerName }, hostId, thumbprint) },
         };
         var table = new DiscoveredHostTable(stub, NullLogger<DiscoveredHostTable>.Instance);
         await table.RefreshAsync(TimeSpan.FromSeconds(1), CancellationToken.None);
-        return table;
+        return (table, hostId, thumbprint);
     }
 
     [Fact]
-    public async Task SendJobAsync_HostAvailable_DeliversJobAndReturnsResult()
+    public async Task SendJobAsync_HostAvailableAndPaired_DeliversJobAndReturnsResult()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         int port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
+        using X509Certificate2 certificate = FakeTlsHost.CreateSelfSignedCertificate();
         byte[] jobData = { 1, 2, 3, 4, 5 };
         var serverTask = Task.Run(async () =>
         {
-            using TcpClient accepted = await listener.AcceptTcpClientAsync();
-            NetworkStream stream = accepted.GetStream();
+            await using SslStream stream = await FakeTlsHost.AcceptAndAuthenticateAsync(listener, certificate);
+            await FakeTlsHost.ExpectAuthenticateRequestAsync(stream);
+
             MessageEnvelope envelope = await FrameReader.ReadFrameAsync(stream);
             var header = FrameReader.ReadMessage<PrintJobRequestHeader>(envelope);
 
@@ -53,8 +72,11 @@ public class JobForwarderTests
             return received.ToArray();
         });
 
-        DiscoveredHostTable table = await BuildResolvedTableAsync(port, "EPSON L3250");
-        var forwarder = new JobForwarder("EPSON L3250", table, NullLogger<JobForwarder>.Instance);
+        (DiscoveredHostTable table, Guid hostId, string thumbprint) = await BuildResolvedTableAsync(port, "EPSON L3250", certificate);
+        HostTokenStore tokenStore = BuildTokenStore();
+        tokenStore.Save(new HostTokenEntry(hostId, "HOST-TESTE", thumbprint, "token-valido", DateTimeOffset.UtcNow));
+
+        var forwarder = new JobForwarder("EPSON L3250", table, BuildClientIdentity(), tokenStore, NullLogger<JobForwarder>.Instance);
 
         using var source = new MemoryStream(jobData);
         PrintJobResult result = await forwarder.SendJobAsync("nota.pdf", source, jobData.Length, CancellationToken.None);
@@ -74,6 +96,7 @@ public class JobForwarderTests
         listener.Start();
         int port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
+        using X509Certificate2 certificate = FakeTlsHost.CreateSelfSignedCertificate();
         var serverTask = Task.Run(async () =>
         {
             using (TcpClient first = await listener.AcceptTcpClientAsync())
@@ -81,16 +104,20 @@ public class JobForwarderTests
                 // Simula o Host caindo no meio da conexão, sem responder nada.
             }
 
-            using TcpClient second = await listener.AcceptTcpClientAsync();
-            NetworkStream stream = second.GetStream();
+            await using SslStream stream = await FakeTlsHost.AcceptAndAuthenticateAsync(listener, certificate);
+            await FakeTlsHost.ExpectAuthenticateRequestAsync(stream);
+
             MessageEnvelope envelope = await FrameReader.ReadFrameAsync(stream);
             var header = FrameReader.ReadMessage<PrintJobRequestHeader>(envelope);
             await FrameReader.ReadRawAsync(stream, header.DataLength, (_, _) => Task.CompletedTask);
             await FrameWriter.WriteMessageAsync(stream, MessageType.PrintJobResult, new PrintJobResult(true, header.DataLength));
         });
 
-        DiscoveredHostTable table = await BuildResolvedTableAsync(port, "EPSON L3250");
-        var forwarder = new JobForwarder("EPSON L3250", table, NullLogger<JobForwarder>.Instance);
+        (DiscoveredHostTable table, Guid hostId, string thumbprint) = await BuildResolvedTableAsync(port, "EPSON L3250", certificate);
+        HostTokenStore tokenStore = BuildTokenStore();
+        tokenStore.Save(new HostTokenEntry(hostId, "HOST-TESTE", thumbprint, "token-valido", DateTimeOffset.UtcNow));
+
+        var forwarder = new JobForwarder("EPSON L3250", table, BuildClientIdentity(), tokenStore, NullLogger<JobForwarder>.Instance);
 
         using var source = new MemoryStream(new byte[] { 9, 9, 9 });
         PrintJobResult result = await forwarder.SendJobAsync("teste.txt", source, 3, CancellationToken.None);
@@ -106,11 +133,72 @@ public class JobForwarderTests
     {
         var stub = new StubDiscoveryClient(); // nunca resolve nada
         var table = new DiscoveredHostTable(stub, NullLogger<DiscoveredHostTable>.Instance);
-        var forwarder = new JobForwarder("Impressora Fantasma", table, NullLogger<JobForwarder>.Instance);
+        var forwarder = new JobForwarder("Impressora Fantasma", table, BuildClientIdentity(), BuildTokenStore(), NullLogger<JobForwarder>.Instance);
 
         using var source = new MemoryStream(new byte[] { 1 });
         await Assert.ThrowsAsync<IOException>(() => forwarder.SendJobAsync("x.txt", source, 1, CancellationToken.None));
 
         await forwarder.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task SendJobAsync_HostAvailableButNotPaired_ThrowsAfterRetriesWithoutConnecting()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        using X509Certificate2 certificate = FakeTlsHost.CreateSelfSignedCertificate();
+        (DiscoveredHostTable table, _, _) = await BuildResolvedTableAsync(port, "EPSON L3250", certificate);
+
+        // Sem token salvo no HostTokenStore: esta máquina nunca foi pareada com este Host.
+        var forwarder = new JobForwarder("EPSON L3250", table, BuildClientIdentity(), BuildTokenStore(), NullLogger<JobForwarder>.Instance);
+
+        using var source = new MemoryStream(new byte[] { 1, 2, 3 });
+        IOException exception = await Assert.ThrowsAsync<IOException>(() => forwarder.SendJobAsync("x.txt", source, 3, CancellationToken.None));
+
+        Assert.Contains("pareada", exception.InnerException?.Message ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.False(listener.Pending()); // o Host nunca chegou a ser contatado
+
+        await forwarder.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task SendJobAsync_HostPresentsUnexpectedCertificate_ThrowsAfterRetries()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        using X509Certificate2 realCertificate = FakeTlsHost.CreateSelfSignedCertificate();
+        using X509Certificate2 impostorCertificate = FakeTlsHost.CreateSelfSignedCertificate();
+
+        var serverTask = Task.Run(async () =>
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                try
+                {
+                    await using SslStream stream = await FakeTlsHost.AcceptAndAuthenticateAsync(listener, impostorCertificate);
+                }
+                catch
+                {
+                    // esperado: o Client recusa o handshake por thumbprint divergente.
+                }
+            }
+        });
+
+        (DiscoveredHostTable table, Guid hostId, _) = await BuildResolvedTableAsync(port, "EPSON L3250", realCertificate);
+        HostTokenStore tokenStore = BuildTokenStore();
+        // Fixa (TOFU) o thumbprint do certificado "real" — o impostor apresenta outro certificado.
+        tokenStore.Save(new HostTokenEntry(hostId, "HOST-TESTE", FakeTlsHost.ThumbprintOf(realCertificate), "token-valido", DateTimeOffset.UtcNow));
+
+        var forwarder = new JobForwarder("EPSON L3250", table, BuildClientIdentity(), tokenStore, NullLogger<JobForwarder>.Instance);
+
+        using var source = new MemoryStream(new byte[] { 1 });
+        await Assert.ThrowsAsync<IOException>(() => forwarder.SendJobAsync("x.txt", source, 1, CancellationToken.None));
+
+        await forwarder.DisposeAsync();
+        await serverTask;
     }
 }
