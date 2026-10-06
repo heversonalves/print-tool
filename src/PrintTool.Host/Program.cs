@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Hosting.WindowsServices;
 using PrintTool.Common.Discovery;
 using PrintTool.Host.Discovery;
 using PrintTool.Host.Network;
@@ -13,6 +14,13 @@ if (args.Length > 0 && TryRunAdminCommand(args, securityDirectory))
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddWindowsService(options => options.ServiceName = "PrintTool.Host");
+
+// Rodando como serviço não há console pra onde escrever; sem isso, os logs da aplicação
+// (fora o ciclo de vida do serviço, que o Windows já registra sozinho) não ficavam em lugar nenhum.
+if (WindowsServiceHelpers.IsWindowsService())
+{
+    builder.Logging.AddEventLog(settings => settings.SourceName = "PrintTool.Host");
+}
 
 builder.Services.Configure<PrintServerOptions>(builder.Configuration.GetSection("PrintServer"));
 builder.Services.Configure<DiscoveryOptions>(builder.Configuration.GetSection("Discovery"));

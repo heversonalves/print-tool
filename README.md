@@ -103,6 +103,25 @@ PrintTool.Host.exe revoke-client <id>    # revoga o acesso de uma delas
 Os dois comandos (`show-totp`, `pair`, `list-clients`, `revoke-client`) rodam o próprio executável
 já instalado como serviço — não sobem um novo serviço, só executam o comando e saem.
 
+### Validação manual — Fase 2
+
+Pareamento e autenticação via TOTP validados em hardware real, nas mesmas duas máquinas da
+validação da Fase 1 (Host com a EPSON L3150 via USB, Client num notebook separado), ambas já
+rodando como Windows Service:
+
+- `show-totp` no Host gerou o QR code e o segredo corretamente; escaneado num app autenticador.
+- `pair` no Client resolveu o Host pela descoberta UDP, pediu o código de 6 dígitos e, aprovado,
+  recebeu e gravou o token de longa duração.
+- A impressão seguinte autenticou via TLS usando esse token (sem pedir código de novo) e saiu
+  fisicamente na EPSON — confirmando o caminho completo: driver → loopback → TLS + token → Host →
+  `winspool.drv`.
+- **Lacuna encontrada e corrigida durante a validação**: rodando como Windows Service, a aplicação
+  não tinha console nem nenhum log persistente — só o registro padrão do Windows sobre o ciclo de
+  vida do serviço aparecia no Visualizador de Eventos, nada da aplicação em si. Corrigido
+  adicionando o provedor de Event Log (`Microsoft.Extensions.Logging.EventLog`), ativo somente
+  quando roda como serviço (fonte `PrintTool.Host` / `PrintTool.Client` no log "Aplicativo"), para
+  não depender de reiniciar em modo console toda vez que for preciso diagnosticar algo em produção.
+
 ## Diretrizes de design
 
 Interface (console de gestão e QR code de pareamento) não deve ter "cara de IA" — sem os clichês visuais genéricos de interface gerada por IA. Buscar direção visual própria e intencional antes de qualquer implementação de UI.
