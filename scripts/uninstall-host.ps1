@@ -12,3 +12,9 @@ Stop-Service -Name $ServiceName -ErrorAction SilentlyContinue
 sc.exe delete $ServiceName
 
 Write-Host "Serviço '$ServiceName' removido."
+
+$shortcutPath = Join-Path ([Environment]::GetFolderPath("CommonStartMenu")) "Programs\PrintTool Host.lnk"
+if (Test-Path $shortcutPath) {
+    Remove-Item $shortcutPath
+    Write-Host "Atalho do Menu Iniciar removido."
+}

@@ -26,17 +26,15 @@ if (WindowsServiceHelpers.IsWindowsService())
 }
 
 string mappingConfigPath = Path.Combine(AppContext.BaseDirectory, "printers.json");
-ClientPrinterMappingConfig mappingConfig = ClientPrinterMappingConfig.LoadOrCreate(mappingConfigPath);
 string spoolDirectory = Path.Combine(AppContext.BaseDirectory, "spool");
 
-builder.Services.AddSingleton(mappingConfig);
 builder.Services.Configure<DiscoveryOptions>(builder.Configuration.GetSection("Discovery"));
 builder.Services.AddSingleton<IDiscoveryClient, UdpDiscoveryClient>();
 builder.Services.AddSingleton<DiscoveredHostTable>();
 builder.Services.AddSingleton(ClientIdentity.LoadOrCreate(Path.Combine(securityDirectory, "client-identity.json")));
 builder.Services.AddSingleton(new HostTokenStore(Path.Combine(securityDirectory, "tokens.json")));
 builder.Services.AddHostedService(sp => new LoopbackServer(
-    mappingConfig,
+    mappingConfigPath,
     sp.GetRequiredService<DiscoveredHostTable>(),
     sp.GetRequiredService<ClientIdentity>(),
     sp.GetRequiredService<HostTokenStore>(),

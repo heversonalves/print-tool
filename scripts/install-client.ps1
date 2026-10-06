@@ -5,6 +5,7 @@
 #>
 param(
     [string]$PublishDir = "$PSScriptRoot\..\src\PrintTool.Client\bin\Release\net8.0-windows\publish",
+    [string]$UiPublishDir = "$PSScriptRoot\..\src\PrintTool.Client.UI\bin\Release\net8.0-windows\publish",
     [string]$ServiceName = "PrintTool.Client"
 )
 
@@ -25,4 +26,22 @@ New-Service `
     -Description "Encaminha jobs de impressão para o Host do Print Tool na rede local."
 
 Write-Host "Serviço '$ServiceName' instalado. Inicie com: Start-Service $ServiceName"
-Write-Host "Antes de iniciar, edite printers.json na pasta do serviço com as portas locais e impressoras remotas."
+Write-Host "Use o app 'PrintTool Client' (atalho criado abaixo) para conectar e parear impressoras — ou edite printers.json na pasta do serviço manualmente."
+
+# Atalho no Menu Iniciar pro app de administração (ver impressoras na rede, conectar e parear
+# uma máquina nova) — o dia a dia passa a ser por ali, sem precisar de terminal nem editar JSON.
+$uiExePath = Join-Path $UiPublishDir "PrintTool.Client.UI.exe"
+if (Test-Path $uiExePath) {
+    $startMenuPrograms = Join-Path ([Environment]::GetFolderPath("CommonStartMenu")) "Programs"
+    $shortcutPath = Join-Path $startMenuPrograms "PrintTool Client.lnk"
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = $uiExePath
+    $shortcut.WorkingDirectory = $UiPublishDir
+    $shortcut.Description = "Conectar esta máquina a impressoras compartilhadas na rede (Print Tool - Client)"
+    $shortcut.Save()
+    Write-Host "Atalho criado no Menu Iniciar: 'PrintTool Client'."
+}
+else {
+    Write-Host "Aviso: '$uiExePath' não encontrado — atalho do Menu Iniciar não criado. Publique com: dotnet publish src\PrintTool.Client.UI -c Release"
+}

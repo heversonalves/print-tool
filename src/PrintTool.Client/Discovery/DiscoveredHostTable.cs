@@ -63,4 +63,16 @@ public sealed class DiscoveredHostTable
             return _byPrinterName.TryGetValue(printerName, out host);
         }
     }
+
+    /// <summary>
+    /// Cópia da tabela completa impressora → Host da última sondagem — usada pelo app de
+    /// administração (Client.UI) para listar tudo que foi visto na rede, não só uma impressora.
+    /// </summary>
+    public IReadOnlyDictionary<string, ResolvedHost> GetAll()
+    {
+        lock (_lock)
+        {
+            return new Dictionary<string, ResolvedHost>(_byPrinterName, StringComparer.OrdinalIgnoreCase);
+        }
+    }
 }

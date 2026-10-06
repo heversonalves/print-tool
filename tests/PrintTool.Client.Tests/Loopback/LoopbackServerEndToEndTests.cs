@@ -72,10 +72,11 @@ public class LoopbackServerEndToEndTests
         await hostTable.RefreshAsync(TimeSpan.FromSeconds(1), CancellationToken.None);
 
         int localPort = GetFreeTcpPort();
-        var mappingConfig = new ClientPrinterMappingConfig
+        string mappingConfigPath = Path.Combine(Path.GetTempPath(), "PrintToolTests_printers_" + Guid.NewGuid() + ".json");
+        new ClientPrinterMappingConfig
         {
             Mappings = { new ClientPrinterMapping(localPort, "EPSON L3250") },
-        };
+        }.Save(mappingConfigPath);
         string spoolDir = Path.Combine(Path.GetTempPath(), "PrintToolTests_spool_" + Guid.NewGuid());
         string tokensPath = Path.Combine(Path.GetTempPath(), "PrintToolTests_tokens_" + Guid.NewGuid() + ".json");
         string identityPath = Path.Combine(Path.GetTempPath(), "PrintToolTests_identity_" + Guid.NewGuid() + ".json");
@@ -84,7 +85,7 @@ public class LoopbackServerEndToEndTests
         var tokenStore = new HostTokenStore(tokensPath);
         tokenStore.Save(new HostTokenEntry(hostId, "HOST-TESTE", thumbprint, "token-de-teste-ja-pareado", DateTimeOffset.UtcNow));
 
-        var loopbackServer = new LoopbackServer(mappingConfig, hostTable, clientIdentity, tokenStore, NullLoggerFactory.Instance, spoolDir);
+        var loopbackServer = new LoopbackServer(mappingConfigPath, hostTable, clientIdentity, tokenStore, NullLoggerFactory.Instance, spoolDir);
         await loopbackServer.StartAsync(CancellationToken.None);
 
         try
@@ -114,7 +115,7 @@ public class LoopbackServerEndToEndTests
                 }
             }
 
-            foreach (string path in new[] { tokensPath, identityPath })
+            foreach (string path in new[] { tokensPath, identityPath, mappingConfigPath })
             {
                 if (File.Exists(path))
                 {
@@ -122,5 +123,92 @@ public class LoopbackServerEndToEndTests
                 }
             }
         }
+    }
+
+    [Fact]
+    public async Task MappingConfigChangedExternally_BridgesStartAndStopWithoutRestart()
+    {
+        var stub = new StubDiscoveryClient(); // sem Host nenhum: não importa pra este teste, só o ciclo de vida do bridge.
+        var hostTable = new DiscoveredHostTable(stub, NullLogger<DiscoveredHostTable>.Instance);
+
+        string mappingConfigPath = Path.Combine(Path.GetTempPath(), "PrintToolTests_printers_" + Guid.NewGuid() + ".json");
+        new ClientPrinterMappingConfig().Save(mappingConfigPath); // começa sem nenhum mapeamento.
+        string spoolDir = Path.Combine(Path.GetTempPath(), "PrintToolTests_spool_" + Guid.NewGuid());
+        string tokensPath = Path.Combine(Path.GetTempPath(), "PrintToolTests_tokens_" + Guid.NewGuid() + ".json");
+        string identityPath = Path.Combine(Path.GetTempPath(), "PrintToolTests_identity_" + Guid.NewGuid() + ".json");
+
+        var clientIdentity = ClientIdentity.LoadOrCreate(identityPath);
+        var tokenStore = new HostTokenStore(tokensPath);
+
+        var loopbackServer = new LoopbackServer(mappingConfigPath, hostTable, clientIdentity, tokenStore, NullLoggerFactory.Instance, spoolDir);
+        await loopbackServer.StartAsync(CancellationToken.None);
+
+        try
+        {
+            int localPort = GetFreeTcpPort();
+            Assert.False(await CanConnectAsync(localPort), "Não deveria haver nenhum bridge escutando antes do mapeamento existir.");
+
+            // Simula o app de administração adicionando uma impressora nova, sem reiniciar o serviço.
+            new ClientPrinterMappingConfig
+            {
+                Mappings = { new ClientPrinterMapping(localPort, "EPSON L3250") },
+            }.Save(mappingConfigPath);
+
+            Assert.True(await WaitUntilAsync(() => CanConnectAsync(localPort), TimeSpan.FromSeconds(5)),
+                "O bridge da porta nova deveria subir sozinho após o arquivo mudar.");
+
+            // Simula a remoção da impressora pelo app de administração.
+            new ClientPrinterMappingConfig().Save(mappingConfigPath);
+
+            Assert.True(await WaitUntilAsync(async () => !await CanConnectAsync(localPort), TimeSpan.FromSeconds(5)),
+                "O bridge deveria parar de escutar depois que o mapeamento foi removido.");
+        }
+        finally
+        {
+            await loopbackServer.StopAsync(CancellationToken.None);
+            foreach (string path in new[] { spoolDir })
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: true);
+                }
+            }
+
+            foreach (string path in new[] { tokensPath, identityPath, mappingConfigPath })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+    }
+
+    private static async Task<bool> CanConnectAsync(int port)
+    {
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync(IPAddress.Loopback, port).WaitAsync(TimeSpan.FromMilliseconds(300));
+            return true;
+        }
+        catch (Exception ex) when (ex is SocketException or TimeoutException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task<bool> WaitUntilAsync(Func<Task<bool>> condition, TimeSpan timeout)
+    {
+        DateTime deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await condition().ConfigureAwait(false))
+            {
+                return true;
+            }
+            await Task.Delay(100).ConfigureAwait(false);
+        }
+        return false;
     }
 }

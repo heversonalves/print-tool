@@ -47,4 +47,29 @@ public class SharedPrintersConfigTests : IDisposable
 
         Assert.Equal(expected, config.IsShared(printerName));
     }
+
+    [Fact]
+    public async Task LoadOrCreate_FileChangedExternally_IsSharedReflectsNewContentWithoutRecreatingInstance()
+    {
+        var original = new SharedPrintersConfig { SharedPrinterNames = { "EPSON L3250" } };
+        original.Save(ConfigPath);
+
+        SharedPrintersConfig config = SharedPrintersConfig.LoadOrCreate(ConfigPath);
+        Assert.True(config.IsShared("EPSON L3250"));
+        Assert.False(config.IsShared("Brother HL-1212W"));
+
+        // Simula o app de administração trocando quais impressoras estão compartilhadas,
+        // sem que o serviço (dono de 'config') seja reiniciado.
+        var updated = new SharedPrintersConfig { SharedPrinterNames = { "Brother HL-1212W" } };
+        updated.Save(ConfigPath);
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline && !config.IsShared("Brother HL-1212W"))
+        {
+            await Task.Delay(100);
+        }
+
+        Assert.True(config.IsShared("Brother HL-1212W"));
+        Assert.False(config.IsShared("EPSON L3250"));
+    }
 }

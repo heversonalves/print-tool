@@ -122,9 +122,48 @@ rodando como Windows Service:
   quando roda como serviço (fonte `PrintTool.Host` / `PrintTool.Client` no log "Aplicativo"), para
   não depender de reiniciar em modo console toda vez que for preciso diagnosticar algo em produção.
 
+## Apps de administração (Host e Client)
+
+O dia a dia — compartilhar uma impressora nova, parear uma máquina nova, revogar acesso —
+não depende mais de abrir terminal nem editar JSON na mão. Dois apps WPF mínimos (abrir, usar,
+fechar — sem bandeja do sistema, sem consumir recursos quando fechados) cobrem exatamente os
+mesmos comandos de CLI acima, lendo e escrevendo os mesmos arquivos (`sharedprinters.json`,
+`printers.json`, pasta `security/`) que o serviço Windows já usa:
+
+- **PrintTool.Host.UI** — três telas: impressoras locais (toggle "compartilhada" por impressora),
+  pareamento (QR code + segredo em texto, equivalente a `show-totp`) e máquinas pareadas (status
+  ativo/revogado + botão "Revogar", equivalente a `list-clients`/`revoke-client`).
+- **PrintTool.Client.UI** — três telas: impressoras vistas na rede (descoberta automática),
+  conectar (escolhe a impressora, digita o código de 6 dígitos num campo estilo "passcode",
+  equivalente a `pair`) e impressoras configuradas (status pareado/pendente + repetir pareamento
+  ou remover).
+
+Os comandos de CLI continuam existindo como caminho alternativo/headless — nenhum foi removido.
+
+O serviço Windows passou a observar `sharedprinters.json` (Host) e `printers.json` (Client) e
+recarregar sozinho quando esses arquivos mudam (`FileSystemWatcher`), em até poucos segundos —
+sem isso, os apps só editariam arquivo e o problema original (precisar reiniciar o serviço pelo
+terminal) continuaria existindo disfarçado.
+
+Publique e instale como qualquer um dos agentes:
+
+```
+dotnet publish src\PrintTool.Host.UI -c Release
+dotnet publish src\PrintTool.Client.UI -c Release
+```
+
+Os scripts `install-host.ps1`/`install-client.ps1` criam automaticamente um atalho no Menu
+Iniciar ("PrintTool Host"/"PrintTool Client") apontando pro executável publicado, se ele existir.
+
 ## Diretrizes de design
 
 Interface (console de gestão e QR code de pareamento) não deve ter "cara de IA" — sem os clichês visuais genéricos de interface gerada por IA. Buscar direção visual própria e intencional antes de qualquer implementação de UI.
+
+Os apps de administração (`PrintTool.Host.UI`, `PrintTool.Client.UI`) seguem essa diretriz com
+uma linha minimalista inspirada em Apple/Samsung: paleta neutra com um único tom de destaque,
+tipografia Segoe UI Variable, cantos arredondados e bastante espaço em branco, backdrop Mica
+nativo do Windows 11 (com degradação silenciosa em versões sem suporte), modo claro/escuro
+seguindo o tema do Windows, e campo de código estilo "passcode" da Apple para o pareamento.
 
 ## Stack recomendada
 
@@ -134,6 +173,7 @@ Interface (console de gestão e QR code de pareamento) não deve ter "cara de IA
 
 1. Agente Host + Agente Cliente com comunicação básica e descoberta automática (substituição funcional do SMB).
 2. Pareamento via TOTP e emissão de token de longa duração.
-3. Log de auditoria, alertas (offline/papel/tinta-toner) e estatísticas de uso, com envio por e-mail e persistência em banco.
+2.1. Apps de administração em WPF (Host e Client) substituindo o fluxo manual de CLI/JSON do dia a dia — ver "Apps de administração" acima.
+3. Log de auditoria, alertas (offline/papel/tinta-toner) e estatísticas de uso, com envio por e-mail e persistência em banco — colocado em espera a pedido, em favor da fase 2.1.
 4. Console de gestão central (monitoramento, revogação remota, atualização automática dos agentes).
 5. Backlog futuro: failover entre impressoras e impressão segura (pull printing), avaliados conforme demanda de clientes corporativos.

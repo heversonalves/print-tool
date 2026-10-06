@@ -5,6 +5,7 @@
 #>
 param(
     [string]$PublishDir = "$PSScriptRoot\..\src\PrintTool.Host\bin\Release\net8.0-windows\publish",
+    [string]$UiPublishDir = "$PSScriptRoot\..\src\PrintTool.Host.UI\bin\Release\net8.0-windows\publish",
     [string]$ServiceName = "PrintTool.Host"
 )
 
@@ -25,3 +26,21 @@ New-Service `
     -Description "Compartilha impressoras USB locais na rede (Print Tool)."
 
 Write-Host "Serviço '$ServiceName' instalado. Inicie com: Start-Service $ServiceName"
+
+# Atalho no Menu Iniciar pro app de administração (compartilhar impressora, QR de pareamento,
+# revogar máquinas) — o dia a dia passa a ser por ali, sem precisar de terminal.
+$uiExePath = Join-Path $UiPublishDir "PrintTool.Host.UI.exe"
+if (Test-Path $uiExePath) {
+    $startMenuPrograms = Join-Path ([Environment]::GetFolderPath("CommonStartMenu")) "Programs"
+    $shortcutPath = Join-Path $startMenuPrograms "PrintTool Host.lnk"
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = $uiExePath
+    $shortcut.WorkingDirectory = $UiPublishDir
+    $shortcut.Description = "Administrar impressoras compartilhadas e pareamento (Print Tool - Host)"
+    $shortcut.Save()
+    Write-Host "Atalho criado no Menu Iniciar: 'PrintTool Host'."
+}
+else {
+    Write-Host "Aviso: '$uiExePath' não encontrado — atalho do Menu Iniciar não criado. Publique com: dotnet publish src\PrintTool.Host.UI -c Release"
+}

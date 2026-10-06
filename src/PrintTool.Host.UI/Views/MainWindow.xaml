@@ -1,0 +1,187 @@
+<Window x:Class="PrintTool.Host.UI.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:PrintTool.Host.UI.ViewModels"
+        Title="PrintTool — Host"
+        Width="460" Height="680" MinWidth="420" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppBackgroundBrush}"
+        FontFamily="{StaticResource TextFontFamily}"
+        SourceInitialized="OnSourceInitialized">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <Grid Margin="24,20,24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Cabeçalho -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="PrintTool" Style="{StaticResource TitleTextStyle}" />
+            <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,2,0,0">
+                <Run Text="Host:" />
+                <Run Text="{Binding HostName, Mode=OneWay}" FontWeight="SemiBold" />
+            </TextBlock>
+        </StackPanel>
+
+        <!-- Navegação segmentada -->
+        <Border Grid.Row="1" Style="{StaticResource SegmentedControlTrackStyle}" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <RadioButton Grid.Column="0" GroupName="Sections" Content="Impressoras"
+                             Style="{StaticResource SegmentedButtonStyle}"
+                             IsChecked="{Binding IsPrintersSectionSelected, Mode=OneWay}"
+                             Command="{Binding SelectPrintersSectionCommand}" />
+                <RadioButton Grid.Column="1" GroupName="Sections" Content="Parear"
+                             Style="{StaticResource SegmentedButtonStyle}"
+                             IsChecked="{Binding IsPairingSectionSelected, Mode=OneWay}"
+                             Command="{Binding SelectPairingSectionCommand}" />
+                <RadioButton Grid.Column="2" GroupName="Sections" Content="Dispositivos"
+                             Style="{StaticResource SegmentedButtonStyle}"
+                             IsChecked="{Binding IsDevicesSectionSelected, Mode=OneWay}"
+                             Command="{Binding SelectDevicesSectionCommand}" />
+            </Grid>
+        </Border>
+
+        <!-- Conteúdo -->
+        <Grid Grid.Row="2">
+
+            <!-- Seção 1: impressoras locais -->
+            <Border Style="{StaticResource CardBorderStyle}"
+                    Visibility="{Binding IsPrintersSectionSelected, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Impressoras locais" Style="{StaticResource HeadingTextStyle}" Margin="0,0,0,4" />
+                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,12"
+                               Text="Ative as impressoras que devem ficar visíveis para as máquinas da rede." />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding LocalPrinters}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,8,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Path Grid.Column="0" Data="{StaticResource IconPrinter}" Style="{StaticResource IconPathFillStyle}"
+                                              Margin="0,0,10,0" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Style="{StaticResource BodyTextStyle}"
+                                                   VerticalAlignment="Center" />
+                                        <ToggleButton Grid.Column="2" Style="{StaticResource ToggleSwitchStyle}"
+                                                      IsChecked="{Binding IsShared}" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- Seção 2: pareamento -->
+            <Border Style="{StaticResource CardBorderStyle}"
+                    Visibility="{Binding IsPairingSectionSelected, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="Parear novo dispositivo" Style="{StaticResource HeadingTextStyle}" Margin="0,0,0,4" />
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,16"
+                               Text="Escaneie o código abaixo no app do dispositivo Client para liberar o acesso às impressoras compartilhadas." />
+
+                    <Border Background="White" CornerRadius="12" Padding="12" HorizontalAlignment="Center">
+                        <Image Source="{Binding QrCodeImage}" Width="220" Height="220" RenderOptions.BitmapScalingMode="HighQuality" />
+                    </Border>
+
+                    <TextBlock Text="ou digite o código manualmente:" Style="{StaticResource CaptionTextStyle}"
+                               Margin="0,20,0,8" HorizontalAlignment="Center" />
+
+                    <Grid HorizontalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Text="{Binding SecretBase32, Mode=OneWay}" IsReadOnly="True"
+                                 Style="{StaticResource TextBoxStyle}" Width="220" />
+                        <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0"
+                                Command="{Binding CopySecretCommand}" ToolTip="Copiar segredo">
+                            <Path Data="{StaticResource IconCopy}" Style="{StaticResource IconPathStrokeStyle}" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Seção 3: máquinas pareadas -->
+            <Border Style="{StaticResource CardBorderStyle}"
+                    Visibility="{Binding IsDevicesSectionSelected, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Máquinas pareadas" Style="{StaticResource HeadingTextStyle}" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Command="{Binding RefreshDevicesCommand}" ToolTip="Atualizar">
+                            <Path Data="{StaticResource IconRefresh}" Style="{StaticResource IconPathStrokeStyle}" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding PairedClients}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,12">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DisplayName}" Style="{StaticResource BodyTextStyle}" FontWeight="SemiBold" />
+                                                <TextBlock Style="{StaticResource CaptionTextStyle}">
+                                                    <Run Text="Pareado em" />
+                                                    <Run Text="{Binding PairedAtText, Mode=OneWay}" />
+                                                </TextBlock>
+                                            </StackPanel>
+
+                                            <Border Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <Border.Style>
+                                                    <Style TargetType="Border" BasedOn="{StaticResource StatusPillStyle}">
+                                                        <Setter Property="Background" Value="{DynamicResource SuccessBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsRevoked}" Value="True">
+                                                                <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="{Binding StatusText}" Style="{StaticResource StatusPillTextStyle}" Foreground="White" />
+                                            </Border>
+
+                                            <Button Grid.Column="2" Content="Revogar" Style="{StaticResource DestructiveButtonStyle}"
+                                                    IsEnabled="{Binding CanRevoke}" Padding="12,6"
+                                                    Command="{Binding DataContext.RevokeCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding ClientId}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+        </Grid>
+    </Grid>
+</Window>

@@ -19,12 +19,21 @@ public static class QrCodeWriter
 
     public static void WritePng(string otpAuthUri, string pngPath)
     {
-        var generator = new QRCodeGenerator();
-        QRCodeData data = generator.CreateQrCode(otpAuthUri, QRCodeGenerator.ECCLevel.Q);
-        var pngCode = new PngByteQRCode(data);
-        byte[] pngBytes = pngCode.GetGraphic(20);
+        byte[] pngBytes = GeneratePng(otpAuthUri);
 
         Directory.CreateDirectory(Path.GetDirectoryName(pngPath) ?? ".");
         File.WriteAllBytes(pngPath, pngBytes);
+    }
+
+    /// <summary>
+    /// Gera o PNG do QR code em memória, sem gravar em disco — usado pelo app de
+    /// administração (Host.UI) para mostrar o QR code direto na tela.
+    /// </summary>
+    public static byte[] GeneratePng(string otpAuthUri)
+    {
+        var generator = new QRCodeGenerator();
+        QRCodeData data = generator.CreateQrCode(otpAuthUri, QRCodeGenerator.ECCLevel.Q);
+        var pngCode = new PngByteQRCode(data);
+        return pngCode.GetGraphic(20);
     }
 }

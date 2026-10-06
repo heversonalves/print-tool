@@ -1,0 +1,214 @@
+<Window x:Class="PrintTool.Client.UI.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:PrintTool.Client.UI.ViewModels"
+        xmlns:shared="clr-namespace:PrintTool.Ui.Shared.Controls;assembly=PrintTool.Ui.Shared"
+        xmlns:converters="clr-namespace:PrintTool.Ui.Shared.Converters;assembly=PrintTool.Ui.Shared"
+        Title="PrintTool — Client"
+        Width="460" Height="680" MinWidth="420" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppBackgroundBrush}"
+        FontFamily="{StaticResource TextFontFamily}"
+        SourceInitialized="OnSourceInitialized">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <converters:InverseBooleanConverter x:Key="InverseBool" />
+    </Window.Resources>
+
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <Grid Margin="24,20,24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Cabeçalho -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="PrintTool" Style="{StaticResource TitleTextStyle}" />
+            <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,2,0,0" Text="Conectar a uma impressora da rede" />
+        </StackPanel>
+
+        <!-- Navegação segmentada -->
+        <Border Grid.Row="1" Style="{StaticResource SegmentedControlTrackStyle}" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <RadioButton Grid.Column="0" GroupName="Sections" Content="Rede"
+                             Style="{StaticResource SegmentedButtonStyle}"
+                             IsChecked="{Binding IsDiscoverySectionSelected, Mode=OneWay}"
+                             Command="{Binding SelectDiscoverySectionCommand}" />
+                <RadioButton Grid.Column="1" GroupName="Sections" Content="Parear"
+                             Style="{StaticResource SegmentedButtonStyle}"
+                             IsChecked="{Binding IsPairingSectionSelected, Mode=OneWay}"
+                             Command="{Binding SelectPairingSectionCommand}" />
+                <RadioButton Grid.Column="2" GroupName="Sections" Content="Configuradas"
+                             Style="{StaticResource SegmentedButtonStyle}"
+                             IsChecked="{Binding IsConfiguredSectionSelected, Mode=OneWay}"
+                             Command="{Binding SelectConfiguredSectionCommand}" />
+            </Grid>
+        </Border>
+
+        <!-- Conteúdo -->
+        <Grid Grid.Row="2">
+
+            <!-- Seção 1: impressoras na rede -->
+            <Border Style="{StaticResource CardBorderStyle}"
+                    Visibility="{Binding IsDiscoverySectionSelected, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Impressoras na rede" Style="{StaticResource HeadingTextStyle}" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Command="{Binding RefreshDiscoveryCommand}" ToolTip="Atualizar">
+                            <Path Data="{StaticResource IconRefresh}" Style="{StaticResource IconPathStrokeStyle}" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,12"
+                               Text="Máquinas Host que compartilham impressoras, vistas agora na rede local." />
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding DiscoveredPrinters}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Path Grid.Column="0" Data="{StaticResource IconPrinter}" Style="{StaticResource IconPathFillStyle}" Margin="0,0,10,0" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding PrinterName}" Style="{StaticResource BodyTextStyle}" FontWeight="SemiBold" />
+                                                <TextBlock Style="{StaticResource CaptionTextStyle}">
+                                                    <Run Text="Host:" />
+                                                    <Run Text="{Binding HostName, Mode=OneWay}" />
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Content="{Binding ConnectButtonText}" Style="{StaticResource SecondaryButtonStyle}"
+                                                    Padding="14,7" IsEnabled="{Binding IsAlreadyConfigured, Converter={StaticResource InverseBool}}"
+                                                    Command="{Binding DataContext.ConnectToDiscoveredCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- Seção 2: parear -->
+            <Border Style="{StaticResource CardBorderStyle}"
+                    Visibility="{Binding IsPairingSectionSelected, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="Conectar impressora" Style="{StaticResource HeadingTextStyle}" Margin="0,0,0,4" />
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,16"
+                               Text="Confirme o nome da impressora e digite o código de 6 dígitos mostrado no app do Host." />
+
+                    <TextBlock Text="Impressora" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,6" />
+                    <TextBox Text="{Binding SelectedPrinterName, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource TextBoxStyle}" Margin="0,0,0,20" />
+
+                    <TextBlock Text="Código do autenticador" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,10" HorizontalAlignment="Center" />
+                    <shared:PasscodeBox x:Name="PasscodeInput" Code="{Binding Code, Mode=TwoWay}" HorizontalAlignment="Center" Margin="0,0,0,16" />
+
+                    <TextBlock Text="{Binding PairingStatusMessage}"
+                               TextAlignment="Center" Margin="0,0,0,16" TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+                                <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PairingStatusIsError}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <Button Content="Conectar" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Center"
+                            Command="{Binding ConnectCommand}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Seção 3: impressoras configuradas -->
+            <Border Style="{StaticResource CardBorderStyle}"
+                    Visibility="{Binding IsConfiguredSectionSelected, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Impressoras configuradas" Style="{StaticResource HeadingTextStyle}" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Command="{Binding RefreshConfiguredCommand}" ToolTip="Atualizar">
+                            <Path Data="{StaticResource IconRefresh}" Style="{StaticResource IconPathStrokeStyle}" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding ConfiguredPrinters}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,12">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{Binding RemotePrinterName}" Style="{StaticResource BodyTextStyle}" FontWeight="SemiBold" />
+                                                    <TextBlock Style="{StaticResource CaptionTextStyle}">
+                                                        <Run Text="{Binding HostStatusText, Mode=OneWay}" />
+                                                        <Run Text=" · porta local " />
+                                                        <Run Text="{Binding LocalPort, Mode=OneWay}" />
+                                                    </TextBlock>
+                                                </StackPanel>
+                                                <Border Grid.Column="1" VerticalAlignment="Center">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border" BasedOn="{StaticResource StatusPillStyle}">
+                                                            <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsPaired}" Value="True">
+                                                                    <Setter Property="Background" Value="{DynamicResource SuccessBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource StatusPillTextStyle}" Foreground="White" />
+                                                </Border>
+                                            </Grid>
+
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                                                <Button Content="{Binding PairButtonText}" Style="{StaticResource SecondaryButtonStyle}" Padding="12,6" Margin="0,0,8,0"
+                                                        Command="{Binding DataContext.PairConfiguredCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                                <Button Content="Remover" Style="{StaticResource DestructiveButtonStyle}" Padding="12,6"
+                                                        Command="{Binding DataContext.RemoveConfiguredCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+        </Grid>
+    </Grid>
+</Window>
