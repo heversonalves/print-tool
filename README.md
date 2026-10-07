@@ -148,9 +148,10 @@ terminal) continuaria existindo disfarçado.
 `PrintTool.Host.UI` e `PrintTool.Client.UI` publicam **direto na mesma pasta** do agente
 correspondente (`PrintTool.Host`/`PrintTool.Client`), não numa pasta própria — é assim que os
 dois lêem/escrevem exatamente os mesmos arquivos (`security/`, `sharedprinters.json`,
-`printers.json`) sem precisar copiar nada manualmente. Como consequência, **pare o serviço
-antes de publicar**, do mesmo jeito que já era necessário pra publicar o próprio agente
-(arquivo bloqueado enquanto o serviço está rodando):
+`printers.json`) sem precisar copiar nada manualmente. Como consequência, **pare o serviço E
+feche a janela do app de administração, se estiver aberta,** antes de publicar — os três
+(serviço, `Host.UI`/`Client.UI` publicado antes, e o novo publish) disputam os mesmos `.dll`
+na mesma pasta:
 
 ```
 Stop-Service PrintTool.Host
