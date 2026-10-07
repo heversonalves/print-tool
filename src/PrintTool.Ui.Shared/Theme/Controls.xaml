@@ -205,7 +205,7 @@
         <Setter Property="Padding" Value="10,4" />
     </Style>
 
-    <Style x:Key="StatusPillTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+    <Style x:Key="StatusPillTextStyle" TargetType="TextBlock" BasedOn="{DynamicResource CaptionTextStyle}">
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 

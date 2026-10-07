@@ -157,7 +157,7 @@
 
                                             <Border Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
                                                 <Border.Style>
-                                                    <Style TargetType="Border" BasedOn="{StaticResource StatusPillStyle}">
+                                                    <Style TargetType="Border" BasedOn="{DynamicResource StatusPillStyle}">
                                                         <Setter Property="Background" Value="{DynamicResource SuccessBrush}" />
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsRevoked}" Value="True">
