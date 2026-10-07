@@ -140,16 +140,11 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private void RevokeClient(Guid? clientId)
+    private void RevokeClient(Guid clientId)
     {
-        if (clientId is null)
+        if (_clientTokenStore.Revoke(clientId))
         {
-            return;
-        }
-
-        if (_clientTokenStore.Revoke(clientId.Value))
-        {
-            PairedClientItem? item = PairedClients.FirstOrDefault(c => c.ClientId == clientId.Value);
+            PairedClientItem? item = PairedClients.FirstOrDefault(c => c.ClientId == clientId);
             if (item is not null)
             {
                 item.IsRevoked = true;

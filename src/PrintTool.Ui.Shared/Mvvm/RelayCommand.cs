@@ -30,10 +30,10 @@ public sealed class RelayCommand : ICommand
 /// </summary>
 public sealed class RelayCommand<T> : ICommand
 {
-    private readonly Action<T?> _execute;
-    private readonly Func<T?, bool>? _canExecute;
+    private readonly Action<T> _execute;
+    private readonly Func<T, bool>? _canExecute;
 
-    public RelayCommand(Action<T?> execute, Func<T?, bool>? canExecute = null)
+    public RelayCommand(Action<T> execute, Func<T, bool>? canExecute = null)
     {
         _execute = execute;
         _canExecute = canExecute;
@@ -45,9 +45,14 @@ public sealed class RelayCommand<T> : ICommand
         remove => CommandManager.RequerySuggested -= value;
     }
 
-    public bool CanExecute(object? parameter) => _canExecute?.Invoke((T?)parameter) ?? true;
+    public bool CanExecute(object? parameter) => _canExecute?.Invoke(CastParameter(parameter)) ?? true;
 
-    public void Execute(object? parameter) => _execute((T?)parameter);
+    public void Execute(object? parameter) => _execute(CastParameter(parameter));
+
+    // Usa "is" em vez de cast direto: funciona tanto pra T referência (vira null) quanto pra
+    // T valor (ex. Guid, vira default) sem a ambiguidade de "T?" num genérico sem restrição
+    // (que não vira Nullable<T> pra tipos valor — foi exatamente isso que quebrou o build).
+    private static T CastParameter(object? parameter) => parameter is T value ? value : default!;
 }
 
 /// <summary>
