@@ -26,7 +26,7 @@ public partial class PasscodeBox : UserControl
     public string Code
     {
         get => (string)GetValue(CodeProperty);
-        private set => SetValue(CodeProperty, value);
+        set => SetValue(CodeProperty, value);
     }
 
     /// <summary>Disparado quando os 6 dígitos foram preenchidos.</summary>
