@@ -5,7 +5,6 @@
 #>
 param(
     [string]$PublishDir = "$PSScriptRoot\..\src\PrintTool.Host\bin\Release\net8.0-windows\publish",
-    [string]$UiPublishDir = "$PSScriptRoot\..\src\PrintTool.Host.UI\bin\Release\net8.0-windows\publish",
     [string]$ServiceName = "PrintTool.Host"
 )
 
@@ -29,14 +28,16 @@ Write-Host "Serviço '$ServiceName' instalado. Inicie com: Start-Service $Servic
 
 # Atalho no Menu Iniciar pro app de administração (compartilhar impressora, QR de pareamento,
 # revogar máquinas) — o dia a dia passa a ser por ali, sem precisar de terminal.
-$uiExePath = Join-Path $UiPublishDir "PrintTool.Host.UI.exe"
+# PrintTool.Host.UI publica direto nesta mesma pasta (ver PublishDir no .csproj dele), pra
+# ler/escrever exatamente os mesmos security/sharedprinters.json do serviço.
+$uiExePath = Join-Path $PublishDir "PrintTool.Host.UI.exe"
 if (Test-Path $uiExePath) {
     $startMenuPrograms = Join-Path ([Environment]::GetFolderPath("CommonStartMenu")) "Programs"
     $shortcutPath = Join-Path $startMenuPrograms "PrintTool Host.lnk"
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($shortcutPath)
     $shortcut.TargetPath = $uiExePath
-    $shortcut.WorkingDirectory = $UiPublishDir
+    $shortcut.WorkingDirectory = $PublishDir
     $shortcut.Description = "Administrar impressoras compartilhadas e pareamento (Print Tool - Host)"
     $shortcut.Save()
     Write-Host "Atalho criado no Menu Iniciar: 'PrintTool Host'."

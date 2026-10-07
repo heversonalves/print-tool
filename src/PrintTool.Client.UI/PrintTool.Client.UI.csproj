@@ -7,6 +7,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>PrintTool.Client.UI</AssemblyName>
+
+    <!--
+      Publica direto na mesma pasta do PrintTool.Client (o Windows Service) — não numa pasta
+      própria. Ver o comentário equivalente em PrintTool.Host.UI.csproj: sem isso, cada um
+      acabaria com seu próprio printers.json/security, divergentes entre si.
+    -->
+    <PublishDir>$(MSBuildThisFileDirectory)..\PrintTool.Client\bin\$(Configuration)\$(TargetFramework)\publish\</PublishDir>
   </PropertyGroup>
 
   <ItemGroup>

@@ -145,11 +145,23 @@ recarregar sozinho quando esses arquivos mudam (`FileSystemWatcher`), em até po
 sem isso, os apps só editariam arquivo e o problema original (precisar reiniciar o serviço pelo
 terminal) continuaria existindo disfarçado.
 
-Publique e instale como qualquer um dos agentes:
+`PrintTool.Host.UI` e `PrintTool.Client.UI` publicam **direto na mesma pasta** do agente
+correspondente (`PrintTool.Host`/`PrintTool.Client`), não numa pasta própria — é assim que os
+dois lêem/escrevem exatamente os mesmos arquivos (`security/`, `sharedprinters.json`,
+`printers.json`) sem precisar copiar nada manualmente. Como consequência, **pare o serviço
+antes de publicar**, do mesmo jeito que já era necessário pra publicar o próprio agente
+(arquivo bloqueado enquanto o serviço está rodando):
 
 ```
+Stop-Service PrintTool.Host
 dotnet publish src\PrintTool.Host.UI -c Release
+Start-Service PrintTool.Host
+```
+
+```
+Stop-Service PrintTool.Client
 dotnet publish src\PrintTool.Client.UI -c Release
+Start-Service PrintTool.Client
 ```
 
 Os scripts `install-host.ps1`/`install-client.ps1` criam automaticamente um atalho no Menu
