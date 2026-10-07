@@ -10,7 +10,19 @@
         SourceInitialized="OnSourceInitialized">
 
     <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <ResourceDictionary>
+            <!--
+                Recursos do design system mesclados aqui também (além do Application.Resources,
+                em App.xaml.cs): um Style inline embutido num DataTemplate (ex.: StatusPillStyle
+                mais abaixo) carrega de forma adiada, e nesse caminho o WPF não enxerga com
+                segurança os dicionários da Application pra resolver BasedOn="{StaticResource ...}"
+                — só os da própria Window. Sem isso, dava XamlParseException "recurso não encontrado".
+            -->
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/PrintTool.Ui.Shared;component/Theme/DesignSystem.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        </ResourceDictionary>
     </Window.Resources>
 
     <Window.DataContext>
@@ -157,7 +169,7 @@
 
                                             <Border Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
                                                 <Border.Style>
-                                                    <Style TargetType="Border" BasedOn="{DynamicResource StatusPillStyle}">
+                                                    <Style TargetType="Border" BasedOn="{StaticResource StatusPillStyle}">
                                                         <Setter Property="Background" Value="{DynamicResource SuccessBrush}" />
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsRevoked}" Value="True">

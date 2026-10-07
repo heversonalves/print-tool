@@ -12,8 +12,21 @@
         SourceInitialized="OnSourceInitialized">
 
     <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
-        <converters:InverseBooleanConverter x:Key="InverseBool" />
+        <ResourceDictionary>
+            <!--
+                Recursos do design system mesclados aqui também (além do Application.Resources,
+                em App.xaml.cs): um Style inline embutido num DataTemplate (ex.: StatusPillStyle,
+                CaptionTextStyle mais abaixo) carrega de forma adiada, e nesse caminho o WPF não
+                enxerga com segurança os dicionários da Application pra resolver
+                BasedOn="{StaticResource ...}" — só os da própria Window. Sem isso, dava
+                XamlParseException "recurso não encontrado".
+            -->
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/PrintTool.Ui.Shared;component/Theme/DesignSystem.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <converters:InverseBooleanConverter x:Key="InverseBool" />
+        </ResourceDictionary>
     </Window.Resources>
 
     <Window.DataContext>
@@ -127,7 +140,7 @@
                     <TextBlock Text="{Binding PairingStatusMessage}"
                                TextAlignment="Center" Margin="0,0,0,16" TextWrapping="Wrap">
                         <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{DynamicResource CaptionTextStyle}">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
                                 <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding PairingStatusIsError}" Value="True">
@@ -179,7 +192,7 @@
                                                 </StackPanel>
                                                 <Border Grid.Column="1" VerticalAlignment="Center">
                                                     <Border.Style>
-                                                        <Style TargetType="Border" BasedOn="{DynamicResource StatusPillStyle}">
+                                                        <Style TargetType="Border" BasedOn="{StaticResource StatusPillStyle}">
                                                             <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsPaired}" Value="True">
