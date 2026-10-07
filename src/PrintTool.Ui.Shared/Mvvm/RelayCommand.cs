@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Input;
 
 namespace PrintTool.Ui.Shared.Mvvm;
@@ -86,6 +87,12 @@ public sealed class AsyncRelayCommand : ICommand
         try
         {
             await _execute().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // async void não tem pra quem propagar a exceção — sem isso, qualquer falha de
+            // rede/TLS durante o pareamento ou a descoberta derruba o app inteiro em silêncio.
+            MessageBox.Show(ex.Message, "Erro", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {

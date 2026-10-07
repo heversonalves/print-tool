@@ -66,12 +66,18 @@ public partial class PasscodeBox : UserControl
 
     public void Clear()
     {
-        _suppressCodeCallback = true;
-        foreach (TextBox box in _boxes)
+        try
         {
-            box.Text = string.Empty;
+            _suppressCodeCallback = true;
+            foreach (TextBox box in _boxes)
+            {
+                box.Text = string.Empty;
+            }
         }
-        _suppressCodeCallback = false;
+        finally
+        {
+            _suppressCodeCallback = false;
+        }
 
         Code = string.Empty;
         _boxes[0].Focus();
@@ -89,12 +95,18 @@ public partial class PasscodeBox : UserControl
         var box = (PasscodeBox)d;
         string newCode = (string?)e.NewValue ?? string.Empty;
 
-        box._suppressCodeCallback = true;
-        for (int i = 0; i < DigitCount; i++)
+        try
         {
-            box._boxes[i].Text = i < newCode.Length ? newCode[i].ToString() : string.Empty;
+            box._suppressCodeCallback = true;
+            for (int i = 0; i < DigitCount; i++)
+            {
+                box._boxes[i].Text = i < newCode.Length ? newCode[i].ToString() : string.Empty;
+            }
         }
-        box._suppressCodeCallback = false;
+        finally
+        {
+            box._suppressCodeCallback = false;
+        }
     }
 
     private void OnPreviewTextInput(object sender, TextCompositionEventArgs e)
@@ -128,13 +140,19 @@ public partial class PasscodeBox : UserControl
             return;
         }
 
-        _suppressCodeCallback = true;
         int digitIndex = 0;
-        for (int boxIndex = startIndex; boxIndex < DigitCount && digitIndex < digits.Length; boxIndex++, digitIndex++)
+        try
         {
-            _boxes[boxIndex].Text = digits[digitIndex].ToString();
+            _suppressCodeCallback = true;
+            for (int boxIndex = startIndex; boxIndex < DigitCount && digitIndex < digits.Length; boxIndex++, digitIndex++)
+            {
+                _boxes[boxIndex].Text = digits[digitIndex].ToString();
+            }
         }
-        _suppressCodeCallback = false;
+        finally
+        {
+            _suppressCodeCallback = false;
+        }
 
         UpdateCode();
 
