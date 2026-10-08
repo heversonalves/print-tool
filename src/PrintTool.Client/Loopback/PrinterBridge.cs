@@ -12,6 +12,10 @@ namespace PrintTool.Client.Loopback;
 /// </summary>
 internal sealed class PrinterBridge : IAsyncDisposable
 {
+    // Mantém a conexão com o Host viva mesmo sem jobs pendentes, para que o monitor de
+    // conectividade do Host sempre tenha uma conexão autenticada pra observar.
+    private static readonly TimeSpan KeepAliveInterval = TimeSpan.FromMinutes(1);
+
     private readonly int _localPort;
     private readonly string _printerName;
     private readonly JobForwarder _forwarder;
@@ -22,6 +26,7 @@ internal sealed class PrinterBridge : IAsyncDisposable
     private TcpListener? _listener;
     private CancellationTokenSource? _stoppingCts;
     private Task? _acceptLoopTask;
+    private Task? _keepAliveTask;
 
     public PrinterBridge(int localPort, string printerName, JobForwarder forwarder, LocalJobQueue queue, string spoolDirectory, ILogger logger)
     {
@@ -45,6 +50,7 @@ internal sealed class PrinterBridge : IAsyncDisposable
         _logger.LogInformation("Loopback para '{PrinterName}' escutando em 127.0.0.1:{Port}.", _printerName, _localPort);
 
         _acceptLoopTask = AcceptLoopAsync(_stoppingCts.Token);
+        _keepAliveTask = KeepAliveLoopAsync(_stoppingCts.Token);
         return Task.CompletedTask;
     }
 
@@ -53,9 +59,47 @@ internal sealed class PrinterBridge : IAsyncDisposable
         _stoppingCts?.Cancel();
         _listener?.Stop();
 
+        var pending = new List<Task>();
         if (_acceptLoopTask is not null)
         {
-            await Task.WhenAny(_acceptLoopTask, Task.Delay(Timeout.Infinite, cancellationToken)).ConfigureAwait(false);
+            pending.Add(_acceptLoopTask);
+        }
+        if (_keepAliveTask is not null)
+        {
+            pending.Add(_keepAliveTask);
+        }
+
+        if (pending.Count > 0)
+        {
+            await Task.WhenAny(Task.WhenAll(pending), Task.Delay(Timeout.Infinite, cancellationToken)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Chama <see cref="JobForwarder.KeepAliveAsync"/> logo ao subir (pra já conectar sem
+    /// esperar o primeiro job ou o primeiro intervalo) e depois a cada <see cref="KeepAliveInterval"/>.
+    /// </summary>
+    private async Task KeepAliveLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await _forwarder.KeepAliveAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            try
+            {
+                await Task.Delay(KeepAliveInterval, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
         }
     }
 

@@ -89,6 +89,27 @@ public sealed class JobForwarder : IAsyncDisposable
         throw new IOException($"Não foi possível entregar o job '{jobName}' para '{_printerName}' após {MaxAttemptsPerSend} tentativas.", lastError);
     }
 
+    /// <summary>
+    /// Garante que haja uma conexão autenticada com o Host mesmo sem nenhum job pendente.
+    /// Chamada periodicamente por quem mantém esta instância (ver <see cref="Loopback.PrinterBridge"/>):
+    /// sem isso, a conexão só existe no instante exato de enviar um job, e o monitor de
+    /// conectividade do Host (<c>ConnectivityRegistry</c>) nunca observa um estado "conectado"
+    /// fora dele. Falhas são esperadas (Host fora do ar, ainda não pareado) e só geram um log —
+    /// não há job em andamento para propagar o erro, e quem chama não deve ter que tratar exceção.
+    /// </summary>
+    public async Task KeepAliveAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await EnsureConnectedAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or SocketException or ProtocolException or InvalidOperationException or AuthenticationException)
+        {
+            _logger.LogDebug(ex, "Falha ao manter conexão ativa com o Host para '{PrinterName}'.", _printerName);
+            await DisconnectAsync().ConfigureAwait(false);
+        }
+    }
+
     private static TimeSpan BackoffFor(int attempt) => TimeSpan.FromMilliseconds(500 * Math.Pow(2, attempt - 1));
 
     private async Task<Stream> EnsureConnectedAsync(CancellationToken cancellationToken)

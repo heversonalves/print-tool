@@ -164,6 +164,47 @@ public class JobForwarderTests : IDisposable
     }
 
     [Fact]
+    public async Task KeepAliveAsync_HostAvailableAndPaired_AuthenticatesWithoutAnyJob()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        using X509Certificate2 certificate = FakeTlsHost.CreateSelfSignedCertificate();
+        var serverTask = Task.Run(async () =>
+        {
+            await using SslStream stream = await FakeTlsHost.AcceptAndAuthenticateAsync(listener, certificate);
+            await FakeTlsHost.ExpectAuthenticateRequestAsync(stream);
+        });
+
+        (DiscoveredHostTable table, Guid hostId, string thumbprint) = await BuildResolvedTableAsync(port, "EPSON L3250", certificate);
+        HostTokenStore tokenStore = BuildTokenStore();
+        tokenStore.Save(new HostTokenEntry(hostId, "HOST-TESTE", thumbprint, "token-valido", DateTimeOffset.UtcNow));
+
+        var forwarder = new JobForwarder("EPSON L3250", table, BuildClientIdentity(), tokenStore, NullLogger<JobForwarder>.Instance);
+
+        // Sem nenhum job: é exatamente isso que faz o Host ver a máquina como conectada
+        // mesmo ociosa, pro monitor de conectividade observar um estado real.
+        await forwarder.KeepAliveAsync(CancellationToken.None);
+
+        await serverTask;
+        await forwarder.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task KeepAliveAsync_HostUnavailable_DoesNotThrow()
+    {
+        var stub = new StubDiscoveryClient(); // nunca resolve nada
+        var table = new DiscoveredHostTable(stub, NullLogger<DiscoveredHostTable>.Instance);
+        var forwarder = new JobForwarder("Impressora Fantasma", table, BuildClientIdentity(), BuildTokenStore(), NullLogger<JobForwarder>.Instance);
+
+        // Diferente de SendJobAsync, não há job pra propagar o erro: a falha só é logada.
+        await forwarder.KeepAliveAsync(CancellationToken.None);
+
+        await forwarder.DisposeAsync();
+    }
+
+    [Fact]
     public async Task SendJobAsync_HostPresentsUnexpectedCertificate_ThrowsAfterRetries()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);

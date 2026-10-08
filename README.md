@@ -272,6 +272,14 @@ no Git):
   não trava nada.
 - Envio via MailKit (o `SmtpClient` embutido do .NET está obsoleto).
 
+**Keep-alive do Client**: o `JobForwarder` só conectava e autenticava no Host na hora de
+enviar um job de impressão — sem job, sem conexão, e o `ConnectivityRegistry` do Host nunca via
+a máquina como "conectada" fora desse instante. Isso fazia o alerta nunca disparar corretamente
+numa máquina ociosa (sem imprimir nada). Agora o `PrinterBridge` chama
+`JobForwarder.KeepAliveAsync` assim que sobe e depois a cada 1 minuto, mantendo uma conexão
+autenticada aberta com o Host mesmo sem nenhum job pendente — é essa conexão ociosa que o
+monitor de conectividade do Host observa.
+
 Implementado e com os testes automatizados passando — **ainda não validado em hardware real**
 (próximo passo).
 
