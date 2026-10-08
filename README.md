@@ -168,6 +168,53 @@ Start-Service PrintTool.Client
 Os scripts `install-host.ps1`/`install-client.ps1` criam automaticamente um atalho no Menu
 Iniciar ("PrintTool Host"/"PrintTool Client") apontando pro executável publicado, se ele existir.
 
+### Validação manual — apps de administração
+
+Pareamento e impressão validados de ponta a ponta pela interface gráfica, nas mesmas duas
+máquinas das validações anteriores (Host "TI2" com a EPSON L3150, Client num notebook separado):
+abrir o `PrintTool.Host.UI`, ligar o toggle de compartilhamento, abrir o `PrintTool.Client.UI`,
+achar a impressora na aba Rede, conectar, digitar o código de 6 dígitos do autenticador na tela
+de Parear e ver o status virar "Pareado" — sem editar nenhum JSON nem rodar comando de CLI em
+nenhum dos dois lados. Cadastrada a porta no Windows (`127.0.0.1:<porta local mostrada no app>`,
+SNMP desmarcado — mesma nota de instalação da Fase 1), a impressão saiu fisicamente na EPSON.
+
+Como era a primeira vez rodando WPF de verdade (só dava pra escrever o código às cegas neste
+ambiente, sem conseguir compilar), apareceram vários problemas só visíveis em uso real,
+corrigidos nesta ordem:
+
+- **`T?` num genérico sem restrição não vira `Nullable<T>`** — `RelayCommand<Guid>` não compilava
+  porque `Action<T?>` com `T` livre apaga pra `Action<T>` mesmo quando `T` é um tipo valor; só
+  vira `Nullable<T>` de verdade com `where T : struct`. Resolvido convertendo o parâmetro do
+  comando com `is T value ? value : default!` em vez de depender da anotação `?`.
+- **Propriedade de controle customizado precisa de `set` público pro XAML compilar** — o
+  compilador de markup exige um acessador `set` acessível pra permitir `Code="{Binding ...}"`
+  como atributo, mesmo sendo um binding; `private set` dá erro em tempo de compilação (MC3080),
+  não é contornado em runtime como seria de esperar.
+- **Exceção não tratada num `async void` mata o app WPF em silêncio** — sem um handler de
+  `DispatcherUnhandledException` (e sem captura dentro do próprio `AsyncRelayCommand`), qualquer
+  falha de rede durante o pareamento fechava a janela sem nenhuma mensagem. Os dois apps agora
+  mostram a exceção numa caixa de mensagem em vez de simplesmente morrer — foi assim que os
+  próximos dois problemas desta lista ficaram visíveis pra corrigir.
+- **`StaticResource` dentro de um `Style` inline embutido num `DataTemplate` não resolve contra
+  `Application.Resources` de forma confiável** — carrega de forma adiada
+  (`FrameworkTemplate.LoadTemplateXaml`), e nesse caminho o WPF só enxerga os recursos da própria
+  `Window`, não os da aplicação. `DynamicResource` não serve de alternativa porque `Style.BasedOn`
+  não é uma `DependencyProperty`. Corrigido mesclando o design system compartilhado direto em
+  `Window.Resources`, além do `Application.Resources` que já tinha.
+- **Os dois apps de administração publicavam cada um na sua própria pasta** —
+  `PrintTool.Host.UI`/`PrintTool.Client.UI` acabavam com seu próprio `security/totp-secret.json`,
+  diferente do que o serviço real usa pra validar — o QR code mostrado nunca batia com o código
+  aceito. Corrigido fazendo os dois publicarem direto na pasta do agente correspondente
+  (`PublishDir` nos `.csproj`), e documentando que o app aberto (não só o serviço) trava os `.dll`
+  compartilhados durante um novo publish.
+- **`DiscoveryRefreshService` ainda injetava `ClientPrinterMappingConfig` por tipo** — sobrou do
+  refactor de hot-reload do `LoopbackServer` (que passou a receber o caminho do arquivo, não o
+  objeto já carregado); sem o registro no DI, o `PrintTool.Client` inteiro falhava silenciosamente
+  ao subir (`Status: Stopped` sem nenhum erro no Event Log, porque o processo morria antes de
+  logar qualquer coisa). Só apareceu rodando o executável direto no console, fora do modo serviço.
+  Corrigido recarregando o mapeamento do disco a cada ciclo de sondagem, mesmo padrão já usado
+  pelo `LoopbackServer`.
+
 ## Diretrizes de design
 
 Interface (console de gestão e QR code de pareamento) não deve ter "cara de IA" — sem os clichês visuais genéricos de interface gerada por IA. Buscar direção visual própria e intencional antes de qualquer implementação de UI.
