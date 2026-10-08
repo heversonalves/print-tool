@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using PrintTool.Common.Protocol;
 using PrintTool.Common.Protocol.Messages;
 using PrintTool.Common.Security;
+using PrintTool.Host.Alerting;
 using PrintTool.Host.Printers;
 using PrintTool.Host.Security;
 
@@ -27,6 +28,7 @@ public sealed class PrintServer : IHostedService
     private readonly HostIdentity _hostIdentity;
     private readonly TotpSecretStore _totpSecretStore;
     private readonly ClientTokenStore _clientTokenStore;
+    private readonly ConnectivityRegistry _connectivityRegistry;
     private readonly ILogger<PrintServer> _logger;
     private readonly int _port;
 
@@ -45,6 +47,7 @@ public sealed class PrintServer : IHostedService
         HostIdentity hostIdentity,
         TotpSecretStore totpSecretStore,
         ClientTokenStore clientTokenStore,
+        ConnectivityRegistry connectivityRegistry,
         IOptions<PrintServerOptions> options,
         ILogger<PrintServer> logger)
     {
@@ -53,6 +56,7 @@ public sealed class PrintServer : IHostedService
         _hostIdentity = hostIdentity;
         _totpSecretStore = totpSecretStore;
         _clientTokenStore = clientTokenStore;
+        _connectivityRegistry = connectivityRegistry;
         _logger = logger;
         _port = options.Value.Port;
     }
@@ -141,6 +145,10 @@ public sealed class PrintServer : IHostedService
 
                         case MessageType.AuthenticateRequest:
                             authentication = await HandleAuthenticateAsync(sslStream, envelope, remote, cancellationToken).ConfigureAwait(false);
+                            if (authentication is not null)
+                            {
+                                _connectivityRegistry.MarkConnected(authentication.Value.ClientId);
+                            }
                             break;
 
                         case MessageType.PrintJobRequestHeader:
@@ -166,6 +174,11 @@ public sealed class PrintServer : IHostedService
         }
         finally
         {
+            if (authentication is not null)
+            {
+                _connectivityRegistry.MarkDisconnected(authentication.Value.ClientId);
+            }
+
             _logger.LogInformation("Client desconectado: {Remote}.", remote);
         }
     }

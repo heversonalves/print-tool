@@ -82,16 +82,20 @@ public sealed class SharedPrintersConfig
     private void TryReload(string path)
     {
         // O arquivo pode estar sendo escrito ainda quando o evento dispara; algumas tentativas
-        // curtas bastam — se todas falharem, o próximo evento de mudança tenta de novo.
+        // curtas bastam — se todas falharem, o próximo evento de mudança tenta de novo. A leitura
+        // acontece dentro do lock (não só a atribuição) por segurança: se algum dia este objeto
+        // passar a escrever a partir de si mesmo (como o ClientTokenStore já faz hoje), ler fora
+        // do lock permitiria uma leitura antiga terminar depois de uma escrita nova e sobrescrever
+        // o estado com um conteúdo já ultrapassado — foi exatamente esse bug que achamos lá.
         for (int attempt = 0; attempt < 5; attempt++)
         {
             try
             {
-                string json = File.ReadAllText(path);
-                SharedPrintersConfig? reloaded = JsonSerializer.Deserialize<SharedPrintersConfig>(json);
-                if (reloaded is not null)
+                lock (_lock)
                 {
-                    lock (_lock)
+                    string json = File.ReadAllText(path);
+                    SharedPrintersConfig? reloaded = JsonSerializer.Deserialize<SharedPrintersConfig>(json);
+                    if (reloaded is not null)
                     {
                         _reloaded = new HashSet<string>(reloaded.SharedPrinterNames, StringComparer.OrdinalIgnoreCase);
                     }

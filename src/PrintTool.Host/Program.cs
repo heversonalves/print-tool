@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting.WindowsServices;
 using PrintTool.Common.Discovery;
+using PrintTool.Host.Alerting;
 using PrintTool.Host.Discovery;
 using PrintTool.Host.Network;
 using PrintTool.Host.Printers;
@@ -31,6 +32,11 @@ builder.Services.AddSingleton(SharedPrintersConfig.LoadOrCreate(sharedPrintersCo
 builder.Services.AddSingleton(HostIdentity.LoadOrCreate(securityDirectory));
 builder.Services.AddSingleton(TotpSecretStore.LoadOrCreate(Path.Combine(securityDirectory, "totp-secret.json")));
 builder.Services.AddSingleton(ClientTokenStore.LoadOrCreate(Path.Combine(securityDirectory, "tokens.json")));
+
+builder.Services.AddSingleton(AlertingOptions.LoadOrCreate(Path.Combine(securityDirectory, "alerting.json")));
+builder.Services.AddSingleton<ConnectivityRegistry>();
+builder.Services.AddSingleton<IAlertSender, MailKitAlertSender>();
+builder.Services.AddHostedService<ConnectivityMonitorService>();
 
 builder.Services.AddSingleton<IPrinterManager, WindowsPrinterManager>();
 builder.Services.AddSingleton<PrintServer>();

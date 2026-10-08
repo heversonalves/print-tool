@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using PrintTool.Common.Protocol;
 using PrintTool.Common.Protocol.Messages;
 using PrintTool.Common.Security;
+using PrintTool.Host.Alerting;
 using PrintTool.Host.Network;
 using PrintTool.Host.Printers;
 using PrintTool.Host.Security;
@@ -18,6 +19,7 @@ public class PrintServerTests : IAsyncLifetime, IDisposable
     private readonly FakePrinterManager _printerManager = new();
     private readonly SharedPrintersConfig _sharedPrinters = new() { SharedPrinterNames = { "EPSON L3250" } };
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "PrintToolTests_printserver_" + Guid.NewGuid());
+    private readonly ConnectivityRegistry _connectivityRegistry = new();
 
     private HostIdentity _hostIdentity = null!;
     private TotpSecretStore _totpSecretStore = null!;
@@ -37,6 +39,7 @@ public class PrintServerTests : IAsyncLifetime, IDisposable
             _hostIdentity,
             _totpSecretStore,
             _clientTokenStore,
+            _connectivityRegistry,
             Options.Create(new PrintServerOptions { Port = 0 }),
             NullLogger<PrintServer>.Instance);
 
@@ -175,6 +178,32 @@ public class PrintServerTests : IAsyncLifetime, IDisposable
         AuthenticateResult result = await AuthenticateAsync(stream, Guid.NewGuid(), "token-inexistente");
 
         Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task AuthenticateRequest_MarksClientConnectedInRegistry_AndDisconnectedWhenConnectionCloses()
+    {
+        var clientId = Guid.NewGuid();
+        string token = _clientTokenStore.IssueToken(clientId, "Notebook de Teste");
+
+        Assert.False(_connectivityRegistry.IsConnected(clientId));
+
+        TcpClient client = await ConnectAsync();
+        SslStream stream = await AuthenticateTlsAsync(client);
+        await AuthenticateAsync(stream, clientId, token);
+
+        Assert.True(_connectivityRegistry.IsConnected(clientId));
+
+        await stream.DisposeAsync();
+        client.Dispose();
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline && _connectivityRegistry.IsConnected(clientId))
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.False(_connectivityRegistry.IsConnected(clientId));
     }
 
     [Fact]

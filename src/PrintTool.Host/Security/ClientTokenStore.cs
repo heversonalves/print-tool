@@ -144,16 +144,20 @@ public sealed class ClientTokenStore
     {
         // O arquivo pode estar sendo escrito ainda quando o evento dispara (inclusive por nós
         // mesmos, via Save()); algumas tentativas curtas bastam — se todas falharem, o próximo
-        // evento de mudança tenta de novo.
+        // evento de mudança tenta de novo. A leitura acontece DENTRO do lock — não só a
+        // atribuição — porque ClientTokenStore é o único destes stores que também escreve a
+        // partir da própria instância (IssueToken/Revoke): ler fora do lock permite que uma
+        // leitura iniciada antes de um IssueToken/Revoke termine DEPOIS dele e sobrescreva o
+        // estado novo com um conteúdo já ultrapassado.
         for (int attempt = 0; attempt < 5; attempt++)
         {
             try
             {
-                string json = File.ReadAllText(_path);
-                List<ClientTokenEntry>? reloaded = JsonSerializer.Deserialize<List<ClientTokenEntry>>(json);
-                if (reloaded is not null)
+                lock (_lock)
                 {
-                    lock (_lock)
+                    string json = File.ReadAllText(_path);
+                    List<ClientTokenEntry>? reloaded = JsonSerializer.Deserialize<List<ClientTokenEntry>>(json);
+                    if (reloaded is not null)
                     {
                         _entries = reloaded;
                     }

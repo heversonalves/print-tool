@@ -226,6 +226,55 @@ corrigidos nesta ordem:
   `ClientTokenStore` o mesmo `FileSystemWatcher` dos outros dois. Revalidado manualmente: revogar
   agora derruba a próxima impressão na hora, sem precisar reiniciar nada.
 
+## Alertas de conectividade (Fase 3, parcial)
+
+O Host monitora sozinho se as máquinas pareadas (e não revogadas) continuam com uma conexão
+autenticada ativa, e manda um e-mail de alerta **só quando esse estado muda** — não um e-mail a
+cada checagem. A primeira vez que uma máquina é vista nunca gera alerta (linha de base
+silenciosa, para não disparar "desconectado" pra todo mundo assim que o serviço sobe); alertas
+acontecem só numa transição real: conectado → desconectado ("Máquina desconectada") ou o
+contrário ("Conexão restaurada"). Máquinas revogadas são ignoradas — não ter conexão é esperado
+nesse caso.
+
+Fora do horário comercial configurado, a checagem inteira é pulada — uma máquina desligada de
+noite ou no fim de semana não é um problema, então não gera alerta nenhum.
+
+Configuração em `security/alerting.json` (criado automaticamente, com horário seg-sex 08:00-18:00
+e e-mail desativado, na primeira vez que o serviço sobe — edite o arquivo direto, ele nunca entra
+no Git):
+
+```json
+{
+  "Smtp": {
+    "Host": "smtp.gmail.com",
+    "Port": 587,
+    "SenderEmail": "alertas@gmail.com",
+    "SenderAppPassword": "xxxxxxxxxxxxxxxx",
+    "RecipientEmail": "admin@empresa.com"
+  },
+  "CheckIntervalMinutes": 5,
+  "BusinessHours": {
+    "Monday": { "Start": "08:00:00", "End": "18:00:00" },
+    "Saturday": null,
+    "Sunday": null
+  }
+}
+```
+
+- **`SenderAppPassword`** precisa ser uma "Senha de app" do Gmail (Conta Google → Segurança →
+  Verificação em duas etapas → Senhas de app), não a senha normal da conta — o Gmail não aceita
+  SMTP com a senha normal. Enviar e-mail direto de um servidor local (sem usar um relay como o
+  Gmail) não é uma alternativa confiável: a maioria dos provedores de internet bloqueia a porta
+  25 de saída, e mesmo sem bloqueio, provedores de e-mail rejeitam remetentes sem reputação.
+- Um dia sem horário definido (`null`, como sábado/domingo no padrão) fica fechado o dia inteiro.
+- Enquanto `Smtp` não estiver preenchido (`SenderEmail`/`SenderAppPassword`/`RecipientEmail`
+  vazios), o monitoramento roda normalmente mas só loga um aviso em vez de tentar enviar e-mail —
+  não trava nada.
+- Envio via MailKit (o `SmtpClient` embutido do .NET está obsoleto).
+
+Implementado e com os testes automatizados passando — **ainda não validado em hardware real**
+(próximo passo).
+
 ## Diretrizes de design
 
 Interface (console de gestão e QR code de pareamento) não deve ter "cara de IA" — sem os clichês visuais genéricos de interface gerada por IA. Buscar direção visual própria e intencional antes de qualquer implementação de UI.
@@ -245,6 +294,6 @@ seguindo o tema do Windows, e campo de código estilo "passcode" da Apple para o
 1. Agente Host + Agente Cliente com comunicação básica e descoberta automática (substituição funcional do SMB).
 2. Pareamento via TOTP e emissão de token de longa duração.
 2.1. Apps de administração em WPF (Host e Client) substituindo o fluxo manual de CLI/JSON do dia a dia — ver "Apps de administração" acima.
-3. Log de auditoria, alertas (offline/papel/tinta-toner) e estatísticas de uso, com envio por e-mail e persistência em banco — colocado em espera a pedido, em favor da fase 2.1.
+3. Log de auditoria, alertas (offline/papel/tinta-toner) e estatísticas de uso, com envio por e-mail e persistência em banco — parte retomada (alertas de conectividade, ver "Alertas de conectividade" acima); log de auditoria e estatísticas de uso continuam em espera.
 4. Console de gestão central (monitoramento, revogação remota, atualização automática dos agentes).
 5. Backlog futuro: failover entre impressoras e impressão segura (pull printing), avaliados conforme demanda de clientes corporativos.
