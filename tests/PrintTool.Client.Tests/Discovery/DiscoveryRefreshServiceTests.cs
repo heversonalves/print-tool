@@ -23,10 +23,15 @@ public class DiscoveryRefreshServiceTests
         }
     }
 
-    private static ClientPrinterMappingConfig MappingFor(string printerName) => new()
+    private static string MappingFileFor(string printerName)
     {
-        Mappings = { new ClientPrinterMapping(9200, printerName) },
-    };
+        string path = Path.Combine(Path.GetTempPath(), "PrintToolTests_printers_" + Guid.NewGuid() + ".json");
+        new ClientPrinterMappingConfig
+        {
+            Mappings = { new ClientPrinterMapping(9200, printerName) },
+        }.Save(path);
+        return path;
+    }
 
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
@@ -49,8 +54,9 @@ public class DiscoveryRefreshServiceTests
             NextResult = new[] { new DiscoveryAnnouncement(Guid.NewGuid(), "HOST-CAIXA-01", "10.0.0.5", 9100, new[] { "EPSON L3150 Series" }, Guid.NewGuid(), "AA:BB:CC") },
         };
         var table = new DiscoveredHostTable(discovery, NullLogger<DiscoveredHostTable>.Instance);
+        string mappingConfigPath = MappingFileFor("EPSON L3150 Series");
         var service = new DiscoveryRefreshService(
-            table, MappingFor("EPSON L3150 Series"), NullLogger<DiscoveryRefreshService>.Instance,
+            table, mappingConfigPath, NullLogger<DiscoveryRefreshService>.Instance,
             refreshInterval: TimeSpan.FromHours(1));
 
         await service.StartAsync(CancellationToken.None);
@@ -62,6 +68,7 @@ public class DiscoveryRefreshServiceTests
         finally
         {
             await service.StopAsync(CancellationToken.None);
+            File.Delete(mappingConfigPath);
         }
     }
 
@@ -70,8 +77,9 @@ public class DiscoveryRefreshServiceTests
     {
         var discovery = new CountingDiscoveryClient();
         var table = new DiscoveredHostTable(discovery, NullLogger<DiscoveredHostTable>.Instance);
+        string mappingConfigPath = MappingFileFor("EPSON L3150 Series");
         var service = new DiscoveryRefreshService(
-            table, MappingFor("EPSON L3150 Series"), NullLogger<DiscoveryRefreshService>.Instance,
+            table, mappingConfigPath, NullLogger<DiscoveryRefreshService>.Instance,
             refreshInterval: TimeSpan.FromMilliseconds(50));
 
         await service.StartAsync(CancellationToken.None);
@@ -82,6 +90,7 @@ public class DiscoveryRefreshServiceTests
         finally
         {
             await service.StopAsync(CancellationToken.None);
+            File.Delete(mappingConfigPath);
         }
     }
 }

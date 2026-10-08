@@ -12,7 +12,7 @@ namespace PrintTool.Client.Discovery;
 public sealed class DiscoveryRefreshService : BackgroundService
 {
     private readonly DiscoveredHostTable _hostTable;
-    private readonly ClientPrinterMappingConfig _mappingConfig;
+    private readonly string _mappingConfigPath;
     private readonly ILogger<DiscoveryRefreshService> _logger;
     private readonly TimeSpan _refreshInterval;
     private readonly TimeSpan _probeTimeout;
@@ -21,13 +21,13 @@ public sealed class DiscoveryRefreshService : BackgroundService
 
     public DiscoveryRefreshService(
         DiscoveredHostTable hostTable,
-        ClientPrinterMappingConfig mappingConfig,
+        string mappingConfigPath,
         ILogger<DiscoveryRefreshService> logger,
         TimeSpan? refreshInterval = null,
         TimeSpan? probeTimeout = null)
     {
         _hostTable = hostTable;
-        _mappingConfig = mappingConfig;
+        _mappingConfigPath = mappingConfigPath;
         _logger = logger;
         _refreshInterval = refreshInterval ?? TimeSpan.FromSeconds(30);
         _probeTimeout = probeTimeout ?? TimeSpan.FromSeconds(2);
@@ -64,11 +64,15 @@ public sealed class DiscoveryRefreshService : BackgroundService
 
     /// <summary>
     /// Registra no log só quando a resolução de uma impressora configurada muda (encontrada,
-    /// trocou de Host ou sumiu), para não repetir a mesma linha a cada sondagem.
+    /// trocou de Host ou sumiu), para não repetir a mesma linha a cada sondagem. Recarrega o
+    /// mapeamento do disco a cada ciclo — assim uma impressora pareada pelo app de administração
+    /// enquanto o serviço já estava de pé também aparece aqui, sem precisar reiniciar o serviço.
     /// </summary>
     private void LogResolutionChanges()
     {
-        foreach (ClientPrinterMapping mapping in _mappingConfig.Mappings)
+        ClientPrinterMappingConfig mappingConfig = ClientPrinterMappingConfig.LoadOrCreate(_mappingConfigPath);
+
+        foreach (ClientPrinterMapping mapping in mappingConfig.Mappings)
         {
             _hostTable.TryResolve(mapping.RemotePrinterName, out ResolvedHost? current);
             bool seenBefore = _lastResolved.TryGetValue(mapping.RemotePrinterName, out ResolvedHost? previous);

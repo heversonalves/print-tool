@@ -40,7 +40,10 @@ builder.Services.AddHostedService(sp => new LoopbackServer(
     sp.GetRequiredService<HostTokenStore>(),
     sp.GetRequiredService<ILoggerFactory>(),
     spoolDirectory));
-builder.Services.AddHostedService<DiscoveryRefreshService>();
+builder.Services.AddHostedService(sp => new DiscoveryRefreshService(
+    sp.GetRequiredService<DiscoveredHostTable>(),
+    mappingConfigPath,
+    sp.GetRequiredService<ILogger<DiscoveryRefreshService>>()));
 
 var host = builder.Build();
 host.Run();
