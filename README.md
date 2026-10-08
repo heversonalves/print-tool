@@ -214,6 +214,17 @@ corrigidos nesta ordem:
   logar qualquer coisa). Só apareceu rodando o executável direto no console, fora do modo serviço.
   Corrigido recarregando o mapeamento do disco a cada ciclo de sondagem, mesmo padrão já usado
   pelo `LoopbackServer`.
+- **Revogar pelo Host.UI não tinha efeito imediato** — testado manualmente: revogar a máquina e
+  tentar imprimir de novo continuava funcionando. Duas causas combinadas: (1) `PrintServer`
+  guardava a autenticação como um bool validado uma única vez por conexão TCP, e como o Client
+  mantém conexão persistente (vários jobs, uma conexão), revogar só valia pra conexões novas; (2)
+  `ClientTokenStore` carregava `tokens.json` uma única vez na inicialização do serviço e nunca
+  recarregava — diferente do `SharedPrintersConfig`/`ClientPrinterMappingConfig`, que já tinham
+  esse hot-reload desde o começo da Fase 2.1, um padrão que passou batido aqui porque
+  `ClientTokenStore` tem o mesmo formato (escrito pelo Host.UI, lido pelo serviço já rodando).
+  Corrigido revalidando o token a cada job (não só uma vez por conexão) e dando ao
+  `ClientTokenStore` o mesmo `FileSystemWatcher` dos outros dois. Revalidado manualmente: revogar
+  agora derruba a próxima impressão na hora, sem precisar reiniciar nada.
 
 ## Diretrizes de design
 
