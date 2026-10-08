@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PrintTool.Host.UI</AssemblyName>
+
+    <!--
+      Publica direto na mesma pasta do PrintTool.Host (o Windows Service) — não numa pasta
+      própria. Os dois lêem/escrevem exatamente os mesmos arquivos (security/, sharedprinters.json)
+      via AppContext.BaseDirectory; se cada um publicasse na sua própria pasta bin\...\publish,
+      cada um acabaria com seu próprio segredo TOTP/tokens, divergentes um do outro — foi
+      exatamente isso que quebrou o pareamento na validação manual (QR code de um segredo,
+      validação contra outro). Pare o serviço antes de publicar aqui, como já era necessário
+      pra publicar o próprio PrintTool.Host.
+    -->
+    <PublishDir>$(MSBuildThisFileDirectory)..\PrintTool.Host\bin\$(Configuration)\$(TargetFramework)\publish\</PublishDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PrintTool.Host\PrintTool.Host.csproj" />
+    <ProjectReference Include="..\PrintTool.Ui.Shared\PrintTool.Ui.Shared.csproj" />
+  </ItemGroup>
+
+</Project>
