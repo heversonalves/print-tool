@@ -178,6 +178,30 @@ public class PrintServerTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task SubmitJob_AfterTokenRevokedOnSameConnection_IsRejected()
+    {
+        var clientId = Guid.NewGuid();
+        string token = _clientTokenStore.IssueToken(clientId, "Notebook de Teste");
+
+        using TcpClient client = await ConnectAsync();
+        await using SslStream stream = await AuthenticateTlsAsync(client);
+        await AuthenticateAsync(stream, clientId, token);
+
+        PrintJobResult beforeRevoke = await SendJobAsync(stream, "EPSON L3250", "a.txt", new byte[] { 1 });
+        Assert.True(beforeRevoke.Success);
+
+        _clientTokenStore.Revoke(clientId);
+
+        // Mesma conexão TCP, já autenticada antes — a revogação precisa valer mesmo sem
+        // reconectar, senão um Client revogado continua imprimindo até a conexão cair sozinha.
+        PrintJobResult afterRevoke = await SendJobAsync(stream, "EPSON L3250", "b.txt", new byte[] { 2 });
+
+        Assert.False(afterRevoke.Success);
+        var job = Assert.Single(_printerManager.Jobs);
+        Assert.Equal("a.txt", job.JobName);
+    }
+
+    [Fact]
     public async Task AuthenticateRequest_WithRevokedToken_IsRejected()
     {
         var clientId = Guid.NewGuid();

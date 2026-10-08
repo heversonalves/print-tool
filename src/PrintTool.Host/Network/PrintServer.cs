@@ -101,7 +101,7 @@ public sealed class PrintServer : IHostedService
     {
         string remote = client.Client.RemoteEndPoint?.ToString() ?? "desconhecido";
         _logger.LogInformation("Client conectado: {Remote}.", remote);
-        bool authenticated = false;
+        (Guid ClientId, string Token)? authentication = null;
 
         try
         {
@@ -140,10 +140,16 @@ public sealed class PrintServer : IHostedService
                             break;
 
                         case MessageType.AuthenticateRequest:
-                            authenticated = await HandleAuthenticateAsync(sslStream, envelope, remote, cancellationToken).ConfigureAwait(false);
+                            authentication = await HandleAuthenticateAsync(sslStream, envelope, remote, cancellationToken).ConfigureAwait(false);
                             break;
 
                         case MessageType.PrintJobRequestHeader:
+                            // Revalida a cada job, não só uma vez por conexão: a conexão do Client é
+                            // persistente (vários jobs na mesma conexão), então confiar só na checagem
+                            // feita no AuthenticateRequest deixaria uma revogação sem efeito até a
+                            // conexão cair por outro motivo.
+                            bool authenticated = authentication is not null
+                                && _clientTokenStore.Validate(authentication.Value.ClientId, authentication.Value.Token);
                             await HandlePrintJobAsync(sslStream, envelope, authenticated, remote, cancellationToken).ConfigureAwait(false);
                             break;
 
@@ -186,7 +192,7 @@ public sealed class PrintServer : IHostedService
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<bool> HandleAuthenticateAsync(Stream stream, MessageEnvelope envelope, string remote, CancellationToken cancellationToken)
+    private async Task<(Guid ClientId, string Token)?> HandleAuthenticateAsync(Stream stream, MessageEnvelope envelope, string remote, CancellationToken cancellationToken)
     {
         AuthenticateRequest request = FrameReader.ReadMessage<AuthenticateRequest>(envelope);
         bool valid = _clientTokenStore.Validate(request.ClientId, request.Token);
@@ -201,7 +207,7 @@ public sealed class PrintServer : IHostedService
             new AuthenticateResult(valid, valid ? null : "Token inválido ou revogado."),
             cancellationToken).ConfigureAwait(false);
 
-        return valid;
+        return valid ? (request.ClientId, request.Token) : null;
     }
 
     private async Task HandlePrintJobAsync(Stream stream, MessageEnvelope envelope, bool authenticated, string remote, CancellationToken cancellationToken)
