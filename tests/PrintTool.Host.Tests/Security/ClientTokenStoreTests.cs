@@ -90,6 +90,28 @@ public class ClientTokenStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Revoke_ByASeparateInstanceOnDisk_IsPickedUpWithoutRecreatingInstance()
+    {
+        ClientTokenStore service = ClientTokenStore.LoadOrCreate(_path);
+        var clientId = Guid.NewGuid();
+        string token = service.IssueToken(clientId, "Notebook");
+        Assert.True(service.Validate(clientId, token));
+
+        // Simula o app de administração (processo separado) revogando o cliente, sem que o
+        // serviço (dono de 'service', já rodando havia tempo) seja reiniciado.
+        ClientTokenStore adminTool = ClientTokenStore.LoadOrCreate(_path);
+        Assert.True(adminTool.Revoke(clientId));
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline && service.Validate(clientId, token))
+        {
+            await Task.Delay(100);
+        }
+
+        Assert.False(service.Validate(clientId, token));
+    }
+
+    [Fact]
     public void TokenHash_NeverStoredInClearInTheUnderlyingFile()
     {
         ClientTokenStore store = ClientTokenStore.LoadOrCreate(_path);

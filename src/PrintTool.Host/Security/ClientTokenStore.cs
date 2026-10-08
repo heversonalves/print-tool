@@ -8,6 +8,10 @@ namespace PrintTool.Host.Security;
 /// Só o hash SHA-256 do token é persistido — o valor em claro existe apenas no instante da
 /// emissão (devolvido uma única vez em <see cref="IssueToken"/>, dentro do <c>PairingResult</c>)
 /// e nunca é gravado em disco, pelo mesmo motivo que uma senha nunca é gravada em claro.
+/// Quando carregado via <see cref="LoadOrCreate"/>, observa o próprio arquivo e recarrega
+/// sozinho — assim uma revogação feita pelo app de administração (processo separado do
+/// serviço Windows, que só carregou o arquivo uma vez na inicialização) tem efeito imediato,
+/// sem precisar reiniciar o serviço.
 /// </summary>
 public sealed class ClientTokenStore
 {
@@ -16,6 +20,7 @@ public sealed class ClientTokenStore
     private readonly string _path;
     private readonly object _lock = new();
     private List<ClientTokenEntry> _entries;
+    private FileSystemWatcher? _watcher;
 
     private ClientTokenStore(string path, List<ClientTokenEntry> entries)
     {
@@ -25,15 +30,20 @@ public sealed class ClientTokenStore
 
     public static ClientTokenStore LoadOrCreate(string path)
     {
+        ClientTokenStore store;
         if (File.Exists(path))
         {
             string json = File.ReadAllText(path);
             List<ClientTokenEntry>? entries = JsonSerializer.Deserialize<List<ClientTokenEntry>>(json);
-            return new ClientTokenStore(path, entries ?? new List<ClientTokenEntry>());
+            store = new ClientTokenStore(path, entries ?? new List<ClientTokenEntry>());
+        }
+        else
+        {
+            store = new ClientTokenStore(path, new List<ClientTokenEntry>());
+            store.Save();
         }
 
-        var store = new ClientTokenStore(path, new List<ClientTokenEntry>());
-        store.Save();
+        store.AttachWatcher();
         return store;
     }
 
@@ -109,6 +119,56 @@ public sealed class ClientTokenStore
         string json = JsonSerializer.Serialize(_entries, new JsonSerializerOptions { WriteIndented = true });
         Directory.CreateDirectory(Path.GetDirectoryName(_path) ?? ".");
         File.WriteAllText(_path, json);
+    }
+
+    private void AttachWatcher()
+    {
+        string fullPath = Path.GetFullPath(_path);
+        string? directory = Path.GetDirectoryName(fullPath);
+        if (directory is null)
+        {
+            return;
+        }
+
+        var watcher = new FileSystemWatcher(directory, Path.GetFileName(fullPath))
+        {
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size,
+        };
+        watcher.Changed += (_, _) => TryReload();
+        watcher.Created += (_, _) => TryReload();
+        watcher.EnableRaisingEvents = true;
+        _watcher = watcher;
+    }
+
+    private void TryReload()
+    {
+        // O arquivo pode estar sendo escrito ainda quando o evento dispara (inclusive por nós
+        // mesmos, via Save()); algumas tentativas curtas bastam — se todas falharem, o próximo
+        // evento de mudança tenta de novo.
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                string json = File.ReadAllText(_path);
+                List<ClientTokenEntry>? reloaded = JsonSerializer.Deserialize<List<ClientTokenEntry>>(json);
+                if (reloaded is not null)
+                {
+                    lock (_lock)
+                    {
+                        _entries = reloaded;
+                    }
+                }
+                return;
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(50);
+            }
+            catch (JsonException)
+            {
+                Thread.Sleep(50);
+            }
+        }
     }
 }
 
