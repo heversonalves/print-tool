@@ -5,6 +5,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-PrintTool.Host-e6d25868-8f2b-4c80-87d7-815c43e156ba</UserSecretsId>
+
+    <!-- Ver o comentário equivalente em PrintTool.Client.csproj. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishReadyToRun>false</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>

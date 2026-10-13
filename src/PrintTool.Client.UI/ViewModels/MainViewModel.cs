@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using PrintTool.Client;
 using PrintTool.Client.Discovery;
+using PrintTool.Client.Printing;
 using PrintTool.Client.Security;
 using PrintTool.Common.Discovery;
 using PrintTool.Ui.Shared.Mvvm;
@@ -35,6 +36,13 @@ public sealed class MainViewModel : ObservableObject
     private string _code = string.Empty;
     private string _pairingStatusMessage = string.Empty;
     private bool _pairingStatusIsError;
+
+    private bool _isPrinterInstallPromptVisible;
+    private int _pendingLocalPort;
+    private string? _selectedPrinterDriver;
+    private string _printerInstallStatusMessage = string.Empty;
+    private bool _printerInstallStatusIsError;
+    private bool _isInstallingPrinter;
 
     public MainViewModel()
     {
@@ -65,6 +73,10 @@ public sealed class MainViewModel : ObservableObject
         PairConfiguredCommand = new RelayCommand<ConfiguredPrinterItem>(item => StartPairingByName(item?.RemotePrinterName));
         RemoveConfiguredCommand = new RelayCommand<ConfiguredPrinterItem>(RemoveMapping);
         ConnectCommand = new AsyncRelayCommand(PairAsync);
+        InstallPrinterCommand = new AsyncRelayCommand(InstallPrinterAsync);
+        SkipPrinterInstallCommand = new RelayCommand(FinishPairingFlow);
+
+        AvailablePrinterDrivers = new ObservableCollection<string>();
 
         ReloadConfiguredPrinters();
         RefreshDiscoveryCommand.Execute(null);
@@ -116,6 +128,43 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref _pairingStatusIsError, value);
     }
 
+    /// <summary>
+    /// Mostra, dentro da seção "Parear", o passo seguinte ao código aprovado: escolher o
+    /// driver já instalado no Windows e criar a impressora local automaticamente — em vez do
+    /// código de 6 dígitos, que já foi validado nesse ponto.
+    /// </summary>
+    public bool IsPrinterInstallPromptVisible
+    {
+        get => _isPrinterInstallPromptVisible;
+        private set => SetProperty(ref _isPrinterInstallPromptVisible, value);
+    }
+
+    public ObservableCollection<string> AvailablePrinterDrivers { get; }
+
+    public string? SelectedPrinterDriver
+    {
+        get => _selectedPrinterDriver;
+        set => SetProperty(ref _selectedPrinterDriver, value);
+    }
+
+    public string PrinterInstallStatusMessage
+    {
+        get => _printerInstallStatusMessage;
+        private set => SetProperty(ref _printerInstallStatusMessage, value);
+    }
+
+    public bool PrinterInstallStatusIsError
+    {
+        get => _printerInstallStatusIsError;
+        private set => SetProperty(ref _printerInstallStatusIsError, value);
+    }
+
+    public bool IsInstallingPrinter
+    {
+        get => _isInstallingPrinter;
+        private set => SetProperty(ref _isInstallingPrinter, value);
+    }
+
     public RelayCommand SelectDiscoverySectionCommand { get; }
 
     public RelayCommand SelectPairingSectionCommand { get; }
@@ -133,6 +182,10 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand<ConfiguredPrinterItem> RemoveConfiguredCommand { get; }
 
     public AsyncRelayCommand ConnectCommand { get; }
+
+    public AsyncRelayCommand InstallPrinterCommand { get; }
+
+    public RelayCommand SkipPrinterInstallCommand { get; }
 
     private void SetSelectedSection(bool discovery = false, bool pairing = false, bool configured = false)
     {
@@ -178,6 +231,7 @@ public sealed class MainViewModel : ObservableObject
         SelectedPrinterName = printerName;
         Code = string.Empty;
         PairingStatusMessage = string.Empty;
+        IsPrinterInstallPromptVisible = false;
         SetSelectedSection(pairing: true);
     }
 
@@ -210,28 +264,99 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        SaveOrUpdateMapping(SelectedPrinterName);
+        _pendingLocalPort = SaveOrUpdateMapping(SelectedPrinterName);
 
-        PairingStatusMessage = $"'{SelectedPrinterName}' pareada com sucesso. Esta máquina já pode imprimir.";
+        PairingStatusMessage = $"'{SelectedPrinterName}' pareada com sucesso.";
         PairingStatusIsError = false;
         Code = string.Empty;
 
         ReloadConfiguredPrinters();
-        SetSelectedSection(configured: true);
+        await ShowPrinterInstallPromptAsync().ConfigureAwait(true);
     }
 
-    private void SaveOrUpdateMapping(string printerName)
+    /// <summary>
+    /// Retorna a porta local do mapeamento (criando um novo se esta impressora ainda não
+    /// estava configurada), para o passo seguinte de instalação criar a porta do Windows
+    /// apontando pro lugar certo.
+    /// </summary>
+    private int SaveOrUpdateMapping(string printerName)
     {
         ClientPrinterMappingConfig mappingConfig = ClientPrinterMappingConfig.LoadOrCreate(_mappingConfigPath);
 
-        if (mappingConfig.Mappings.Any(m => string.Equals(m.RemotePrinterName, printerName, StringComparison.OrdinalIgnoreCase)))
+        ClientPrinterMapping? existing = mappingConfig.Mappings
+            .FirstOrDefault(m => string.Equals(m.RemotePrinterName, printerName, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
         {
-            return;
+            return existing.LocalPort;
         }
 
         int localPort = GetFreeLocalPort();
         mappingConfig.Mappings.Add(new ClientPrinterMapping(localPort, printerName));
         mappingConfig.Save(_mappingConfigPath);
+        return localPort;
+    }
+
+    private async Task ShowPrinterInstallPromptAsync()
+    {
+        IsPrinterInstallPromptVisible = true;
+        PrinterInstallStatusMessage = "Carregando drivers instalados no Windows...";
+        PrinterInstallStatusIsError = false;
+        AvailablePrinterDrivers.Clear();
+        SelectedPrinterDriver = null;
+
+        IReadOnlyList<string> drivers = await LocalPrinterInstaller.GetInstalledDriverNamesAsync(CancellationToken.None).ConfigureAwait(true);
+        foreach (string driver in drivers.OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+        {
+            AvailablePrinterDrivers.Add(driver);
+        }
+
+        SelectedPrinterDriver = LocalPrinterInstaller.SuggestDriverFor(SelectedPrinterName, drivers);
+
+        PrinterInstallStatusMessage = drivers.Count == 0
+            ? "Nenhum driver de impressora instalado foi encontrado no Windows. Instale o driver do fabricante antes de continuar, ou pule e configure manualmente."
+            : "Escolha o driver desta impressora (o Windows exige um instalado para criar o objeto de impressora).";
+    }
+
+    private async Task InstallPrinterAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedPrinterDriver))
+        {
+            PrinterInstallStatusMessage = "Escolha um driver antes de instalar.";
+            PrinterInstallStatusIsError = true;
+            return;
+        }
+
+        IsInstallingPrinter = true;
+        PrinterInstallStatusMessage = "Instalando (uma janela do Windows pode pedir confirmação de administrador)...";
+        PrinterInstallStatusIsError = false;
+
+        try
+        {
+            string script = LocalPrinterInstaller.BuildInstallScript(SelectedPrinterName, _pendingLocalPort, SelectedPrinterDriver);
+            PrinterInstallResult result = await LocalPrinterInstaller.RunElevatedAsync(script, CancellationToken.None).ConfigureAwait(true);
+
+            if (!result.Success)
+            {
+                PrinterInstallStatusMessage = result.ErrorMessage ?? "Falha ao instalar a impressora.";
+                PrinterInstallStatusIsError = true;
+                return;
+            }
+
+            PrinterInstallStatusMessage = $"Impressora '{SelectedPrinterName}' instalada no Windows com sucesso.";
+            PrinterInstallStatusIsError = false;
+            FinishPairingFlow();
+        }
+        finally
+        {
+            IsInstallingPrinter = false;
+        }
+    }
+
+    private void FinishPairingFlow()
+    {
+        IsPrinterInstallPromptVisible = false;
+        ReloadConfiguredPrinters();
+        SetSelectedSection(configured: true);
     }
 
     private void RemoveMapping(ConfiguredPrinterItem? item)

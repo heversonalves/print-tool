@@ -5,6 +5,15 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-PrintTool.Client-60bf2e43-476e-4f18-b30b-3d3ec2310c13</UserSecretsId>
+
+    <!--
+      Self-contained: o publish já leva o runtime do .NET embutido, então uma máquina nova não
+      precisa instalar o .NET 8 Desktop Runtime antes de rodar o serviço — só copiar a pasta
+      publish e instalar. Custo: a pasta publish fica bem maior (runtime embutido).
+    -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishReadyToRun>false</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>

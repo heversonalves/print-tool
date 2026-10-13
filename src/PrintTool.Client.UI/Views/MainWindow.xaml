@@ -126,33 +126,72 @@
             <Border Style="{StaticResource CardBorderStyle}"
                     Visibility="{Binding IsPairingSectionSelected, Converter={StaticResource BoolToVis}}">
                 <StackPanel>
-                    <TextBlock Text="Conectar impressora" Style="{StaticResource HeadingTextStyle}" Margin="0,0,0,4" />
-                    <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,16"
-                               Text="Confirme o nome da impressora e digite o código de 6 dígitos mostrado no app do Host." />
 
-                    <TextBlock Text="Impressora" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,6" />
-                    <TextBox Text="{Binding SelectedPrinterName, UpdateSourceTrigger=PropertyChanged}"
-                             Style="{StaticResource TextBoxStyle}" Margin="0,0,0,20" />
+                    <!-- Passo 1: código do autenticador -->
+                    <StackPanel Visibility="{Binding IsPrinterInstallPromptVisible, Converter={StaticResource InverseBool}}">
+                        <TextBlock Text="Conectar impressora" Style="{StaticResource HeadingTextStyle}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,16"
+                                   Text="Confirme o nome da impressora e digite o código de 6 dígitos mostrado no app do Host." />
 
-                    <TextBlock Text="Código do autenticador" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,10" HorizontalAlignment="Center" />
-                    <shared:PasscodeBox x:Name="PasscodeInput" Code="{Binding Code, Mode=TwoWay}" HorizontalAlignment="Center" Margin="0,0,0,16" />
+                        <TextBlock Text="Impressora" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,6" />
+                        <TextBox Text="{Binding SelectedPrinterName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource TextBoxStyle}" Margin="0,0,0,20" />
 
-                    <TextBlock Text="{Binding PairingStatusMessage}"
-                               TextAlignment="Center" Margin="0,0,0,16" TextWrapping="Wrap">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
-                                <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding PairingStatusIsError}" Value="True">
-                                        <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
+                        <TextBlock Text="Código do autenticador" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,10" HorizontalAlignment="Center" />
+                        <shared:PasscodeBox x:Name="PasscodeInput" Code="{Binding Code, Mode=TwoWay}" HorizontalAlignment="Center" Margin="0,0,0,16" />
 
-                    <Button Content="Conectar" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Center"
-                            Command="{Binding ConnectCommand}" />
+                        <TextBlock Text="{Binding PairingStatusMessage}"
+                                   TextAlignment="Center" Margin="0,0,0,16" TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+                                    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PairingStatusIsError}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <Button Content="Conectar" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Center"
+                                Command="{Binding ConnectCommand}" />
+                    </StackPanel>
+
+                    <!-- Passo 2: instalar a impressora no Windows (depois do código aprovado) -->
+                    <StackPanel Visibility="{Binding IsPrinterInstallPromptVisible, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Instalar no Windows" Style="{StaticResource HeadingTextStyle}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,16" TextWrapping="Wrap"
+                                   Text="Pareamento aprovado. Escolha o driver já instalado no Windows para esta impressora — o PrintTool cria a porta e o objeto de impressora sozinho." />
+
+                        <TextBlock Text="Driver" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,6" />
+                        <ComboBox ItemsSource="{Binding AvailablePrinterDrivers}"
+                                  SelectedItem="{Binding SelectedPrinterDriver}"
+                                  Style="{StaticResource TextBoxStyle}" Margin="0,0,0,16" />
+
+                        <TextBlock Text="{Binding PrinterInstallStatusMessage}"
+                                   TextAlignment="Center" Margin="0,0,0,16" TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+                                    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PrinterInstallStatusIsError}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button Content="Pular (configurar manualmente)" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                                    IsEnabled="{Binding IsInstallingPrinter, Converter={StaticResource InverseBool}}"
+                                    Command="{Binding SkipPrinterInstallCommand}" />
+                            <Button Content="Instalar impressora" Style="{StaticResource PrimaryButtonStyle}"
+                                    IsEnabled="{Binding IsInstallingPrinter, Converter={StaticResource InverseBool}}"
+                                    Command="{Binding InstallPrinterCommand}" />
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

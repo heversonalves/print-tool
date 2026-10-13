@@ -17,7 +17,17 @@
       validação contra outro). Pare o serviço antes de publicar aqui, como já era necessário
       pra publicar o próprio PrintTool.Host.
     -->
-    <PublishDir>$(MSBuildThisFileDirectory)..\PrintTool.Host\bin\$(Configuration)\$(TargetFramework)\publish\</PublishDir>
+    <!-- Ver o comentário em PrintTool.Client.csproj sobre self-contained. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishReadyToRun>false</PublishReadyToRun>
+
+    <!--
+      O RuntimeIdentifier acima acrescenta "win-x64" ao caminho padrão de publish
+      (bin\Release\net8.0-windows\win-x64\publish\) — o PublishDir precisa refletir isso,
+      senão publica numa pasta "publish\" paralela e vazia em vez da pasta real do serviço.
+    -->
+    <PublishDir>$(MSBuildThisFileDirectory)..\PrintTool.Host\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\publish\</PublishDir>
   </PropertyGroup>
 
   <ItemGroup>

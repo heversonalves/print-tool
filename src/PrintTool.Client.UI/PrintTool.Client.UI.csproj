@@ -13,7 +13,13 @@
       própria. Ver o comentário equivalente em PrintTool.Host.UI.csproj: sem isso, cada um
       acabaria com seu próprio printers.json/security, divergentes entre si.
     -->
-    <PublishDir>$(MSBuildThisFileDirectory)..\PrintTool.Client\bin\$(Configuration)\$(TargetFramework)\publish\</PublishDir>
+    <!-- Ver o comentário em PrintTool.Client.csproj sobre self-contained. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishReadyToRun>false</PublishReadyToRun>
+
+    <!-- Ver o comentário equivalente em PrintTool.Host.UI.csproj sobre o caminho com "win-x64". -->
+    <PublishDir>$(MSBuildThisFileDirectory)..\PrintTool.Client\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\publish\</PublishDir>
   </PropertyGroup>
 
   <ItemGroup>

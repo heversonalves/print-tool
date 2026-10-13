@@ -226,6 +226,60 @@ corrigidos nesta ordem:
   `ClientTokenStore` o mesmo `FileSystemWatcher` dos outros dois. Revalidado manualmente: revogar
   agora derruba a próxima impressão na hora, sem precisar reiniciar nada.
 
+## Instalador (self-contained + .msi + impressora automática)
+
+Rodar os agentes deixou de depender de nada instalado antes, e deixou de exigir terminal:
+
+- **Self-contained**: `PrintTool.Host`, `PrintTool.Client`, `PrintTool.Host.UI` e
+  `PrintTool.Client.UI` publicam com `RuntimeIdentifier=win-x64` e `SelfContained=true` — o
+  runtime do .NET vai embutido no publish (pasta final ~70-100MB em vez de alguns MB), então uma
+  máquina nova não precisa ter o .NET 8 Desktop Runtime instalado antes de rodar o serviço ou o
+  app. O caminho de publish ganhou o segmento `win-x64` (`bin\Release\net8.0-windows\win-x64\publish\`)
+  — os scripts `install-host.ps1`/`install-client.ps1` e o `PublishDir` dos apps de administração
+  já foram atualizados para esse caminho novo.
+- **Instalador `.msi`** (`installer/PrintTool.Host.Installer`, `installer/PrintTool.Client.Installer`,
+  projetos WiX Toolset v5): assistente completo (Avançar/Avançar/Instalar/Concluir), aparece em
+  "Adicionar ou remover programas" com desinstalador, registra o Windows Service, já inicia ele, e
+  cria o atalho do app de administração no Menu Iniciar — tudo isso que os scripts PowerShell
+  faziam em vários passos manuais. Dados da pessoa (`security/`, `printers.json`,
+  `sharedprinters.json`) são preservados numa reinstalação/upgrade (`Permanent="yes"` nos
+  componentes correspondentes).
+
+  Build (no Windows, com o SDK do .NET instalado — o projeto já publica self-contained antes):
+  ```
+  dotnet publish src\PrintTool.Host -c Release
+  dotnet publish src\PrintTool.Host.UI -c Release
+  dotnet tool restore
+  dotnet build installer\PrintTool.Host.Installer -c Release
+  ```
+  O `.msi` final fica em `installer\PrintTool.Host.Installer\bin\x64\Release\PrintToolHostSetup.msi`.
+  O mesmo padrão vale para `PrintTool.Client.Installer`/`PrintToolClientSetup.msi`.
+
+  **Versão do WiX fixada em `dotnet-tools.json`** (`dotnet tool restore` antes de buildar) — a
+  partir da v7 o WiX passou a exigir aceitar uma licença paga (Open Source Maintenance Fee) pra
+  usar a ferramenta; a v5.0.2 usada aqui é anterior a essa mudança e continua gratuita.
+
+  **Não validado em build real do instalador nesta rodada**: o WiX só roda de verdade no Windows —
+  neste ambiente (Linux) a própria ferramenta trava com "comportamento indefinido" mesmo no caso
+  mais trivial possível (`<Directory Name="qualquer coisa">` falha sempre, incondicionalmente, é
+  um bug da build Linux do WiX 5.0.2 e não tem contorno pela sintaxe do `.wxs`). Consegui validar
+  a maior parte do `.wxs` (Files/Exclude, ServiceInstall/ServiceControl, Shortcut, extensão WixUI)
+  compilando pra `.wixlib` com os `Directory` trocados temporariamente por um StandardDirectory
+  direto — mas o arquivo final, com a estrutura de pastas de verdade, só é validado rodando
+  `dotnet build` num Windows real.
+
+- **Instalação automática da impressora no Windows**: depois do pareamento aprovado, o
+  `PrintTool.Client.UI` mostra um passo novo — escolher o driver já instalado no Windows (lista
+  via `Get-PrinterDriver`, com sugestão automática pra quem bate com o nome da impressora
+  compartilhada) e um botão "Instalar impressora", que cria a porta (`Add-PrinterPort`,
+  apontando pro loopback `127.0.0.1:<porta local>`) e o objeto de impressora (`Add-Printer`)
+  sozinho — substitui os passos manuais no Painel de Controle (Adicionar impressora → porta
+  TCP/IP padrão → desmarcar SNMP). Pede elevação de administrador só nesse momento específico
+  (`runas` via PowerShell), não o app inteiro — ver `PrintTool.Client/Printing/LocalPrinterInstaller.cs`.
+  O driver do fabricante ainda precisa estar instalado manualmente antes (não vem embutido); sem
+  um driver compatível já instalado, dá pra pular esse passo e configurar a porta manualmente
+  como antes.
+
 ## Alertas de conectividade (Fase 3, parcial)
 
 O Host monitora sozinho se as máquinas pareadas (e não revogadas) continuam com uma conexão
@@ -302,6 +356,7 @@ seguindo o tema do Windows, e campo de código estilo "passcode" da Apple para o
 1. Agente Host + Agente Cliente com comunicação básica e descoberta automática (substituição funcional do SMB).
 2. Pareamento via TOTP e emissão de token de longa duração.
 2.1. Apps de administração em WPF (Host e Client) substituindo o fluxo manual de CLI/JSON do dia a dia — ver "Apps de administração" acima.
+2.2. Instalador self-contained (.msi) e instalação automática da impressora no Windows após o pareamento — ver "Instalador" acima.
 3. Log de auditoria, alertas (offline/papel/tinta-toner) e estatísticas de uso, com envio por e-mail e persistência em banco — parte retomada (alertas de conectividade, ver "Alertas de conectividade" acima); log de auditoria e estatísticas de uso continuam em espera.
 4. Console de gestão central (monitoramento, revogação remota, atualização automática dos agentes).
 5. Backlog futuro: failover entre impressoras e impressão segura (pull printing), avaliados conforme demanda de clientes corporativos.

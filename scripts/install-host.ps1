@@ -4,7 +4,7 @@
     Publique antes: dotnet publish src\PrintTool.Host -c Release
 #>
 param(
-    [string]$PublishDir = "$PSScriptRoot\..\src\PrintTool.Host\bin\Release\net8.0-windows\publish",
+    [string]$PublishDir = "$PSScriptRoot\..\src\PrintTool.Host\bin\Release\net8.0-windows\win-x64\publish",
     [string]$ServiceName = "PrintTool.Host"
 )
 

@@ -1,0 +1,90 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <!--
+    Instalador do PrintTool Host: leva o runtime do .NET embutido (publish self-contained, ver
+    PrintTool.Host.csproj) — a máquina não precisa ter nada instalado antes — e cuida do que os
+    scripts scripts\install-host.ps1/uninstall-host.ps1 faziam na mão: registra o Windows Service,
+    inicia ele, e cria o atalho do app de administração (PrintTool.Host.UI) no Menu Iniciar.
+    Desinstalar (pelo Painel de Controle) para o serviço e remove tudo, exceto a pasta
+    "security\" e os arquivos de configuração — ver <Component Id="Comp_KeepUserData"> abaixo.
+  -->
+  <Package Name="PrintTool Host"
+           Manufacturer="PrintTool"
+           Version="1.0.0"
+           UpgradeCode="dbfdef31-32e1-4314-8b46-3aa3d9cf204e"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="Já existe uma versão mais nova do PrintTool Host instalada." />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="PrintTool Host" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ShortcutFolder" Name="PrintTool" />
+    </StandardDirectory>
+
+    <!--
+      Todo o conteúdo publicado (DLLs do runtime embutido, appsettings.json, etc.), exceto o
+      próprio PrintTool.Host.exe — esse ganha um Component dedicado abaixo, porque precisa
+      estar junto do <ServiceInstall>/<ServiceControl> dele.
+    -->
+    <ComponentGroup Id="PublishFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)\**">
+        <Exclude Files="$(var.PublishDir)\PrintTool.Host.exe" />
+      </Files>
+    </ComponentGroup>
+
+    <Component Directory="INSTALLFOLDER" Id="Comp_HostService">
+      <File Id="HostExe" Source="$(var.PublishDir)/PrintTool.Host.exe" KeyPath="yes" />
+
+      <ServiceInstall Id="HostServiceInstall"
+                       Name="PrintTool.Host"
+                       DisplayName="Print Tool - Host"
+                       Description="Compartilha impressoras locais na rede para os Clients pareados do Print Tool."
+                       Type="ownProcess"
+                       Start="auto"
+                       ErrorControl="normal"
+                       Account="LocalSystem" />
+
+      <ServiceControl Id="HostServiceControl"
+                       Name="PrintTool.Host"
+                       Start="install"
+                       Stop="both"
+                       Remove="uninstall"
+                       Wait="yes" />
+    </Component>
+
+    <!--
+      Dados da pessoa (segredo TOTP, tokens dos Clients pareados, lista de impressoras
+      compartilhadas) não podem sumir num upgrade/reinstalação — ficam fora do Component do
+      .exe de propósito, e Permanent="yes" impede que uma desinstalação os apague também
+      (se quiser mesmo apagar, é manual: apagar a pasta depois de desinstalar).
+    -->
+    <Component Directory="INSTALLFOLDER" Permanent="yes" Id="Comp_KeepUserData">
+      <CreateFolder Directory="INSTALLFOLDER" />
+      <RegistryValue Root="HKLM" Key="Software\PrintTool\Host" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Directory="ShortcutFolder" Id="Comp_StartMenuShortcut">
+      <Shortcut Id="HostUiShortcut"
+                Name="PrintTool Host"
+                Description="Gerenciar impressoras compartilhadas, pareamento e máquinas conectadas"
+                Target="[INSTALLFOLDER]PrintTool.Host.UI.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveShortcutFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\PrintTool\Host" Name="ShortcutInstalled" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Feature Id="Main" Title="PrintTool Host" Level="1">
+      <ComponentGroupRef Id="PublishFiles" />
+      <ComponentRef Id="Comp_HostService" />
+      <ComponentRef Id="Comp_KeepUserData" />
+      <ComponentRef Id="Comp_StartMenuShortcut" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+  </Package>
+</Wix>
