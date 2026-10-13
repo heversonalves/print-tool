@@ -3,6 +3,7 @@
   <PropertyGroup>
     <OutputName>PrintToolHostSetup</OutputName>
     <OutputType>Package</OutputType>
+    <Platform>x64</Platform>
     <DefineConstants>PublishDir=$(MSBuildThisFileDirectory)..\..\src\PrintTool.Host\bin\Release\net8.0-windows\win-x64\publish</DefineConstants>
   </PropertyGroup>
 

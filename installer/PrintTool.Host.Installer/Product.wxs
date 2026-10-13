@@ -15,6 +15,8 @@
            UpgradeCode="dbfdef31-32e1-4314-8b46-3aa3d9cf204e"
            Scope="perMachine">
 
+    <MediaTemplate EmbedCab="yes" />
+
     <MajorUpgrade DowngradeErrorMessage="Já existe uma versão mais nova do PrintTool Host instalada." />
 
     <StandardDirectory Id="ProgramFiles64Folder">
